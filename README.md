@@ -12,9 +12,17 @@ IndicF5 supports **11 Indian languages**:
 
 ## 🚀 Installation
 ```bash
-conda create -n indicf5 python=3.10 -y
+conda create -n indicf5 python=3.12 -y
 conda activate indicf5
 pip install git+https://github.com/ai4bharat/IndicF5.git
+```
+- or
+```sh
+python -m venv .venv
+source .venv/bin/activate
+
+# pip install -e .
+pip install -r requirements.txt
 ```
 
 
