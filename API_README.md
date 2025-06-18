@@ -6,6 +6,8 @@ A comprehensive REST API for Text-to-Speech using the IndicF5 model, supporting 
 
 - **Single TTS Request**: Convert individual text to speech
 - **Batch TTS Processing**: Process multiple texts in a single request
+- **Automatic Text Chunking**: Automatically splits long texts (>300 chars) into chunks and combines the audio
+- **Smart Text Splitting**: Preserves sentence boundaries, splits at punctuation when possible
 - **Multiple Output Formats**: Support for WAV and MP3 formats
 - **Base64 Audio Response**: Get audio data directly in API response
 - **Server-side File Saving**: Save generated audio files on the server
@@ -13,6 +15,25 @@ A comprehensive REST API for Text-to-Speech using the IndicF5 model, supporting 
 - **Prompt Management**: List and manage available reference prompts
 - **Health Check**: Monitor API status and model loading
 - **CORS Support**: Ready for web application integration
+
+## Text Chunking Feature
+
+When input text exceeds 300 characters, the API automatically:
+
+1. **Splits text intelligently**: Preserves sentence boundaries first, then splits at punctuation (commas, semicolons, colons), and finally by words if necessary
+2. **Processes each chunk**: Generates TTS audio for each text chunk using the specified voice prompt
+3. **Combines audio seamlessly**: Merges all audio chunks into a single WAV file with small pauses between chunks
+4. **Returns unified result**: Provides the combined audio as both a file and base64-encoded response
+
+This ensures natural-sounding speech for long texts while maintaining the quality and consistency of the selected voice.
+
+### Example
+
+- **Input**: 500-character text
+- **Processing**: Automatically split into 2 chunks of ~250 characters each
+- **Output**: Single combined audio file with seamless speech
+
+You can test the chunking logic using the `/api/tts/chunk-demo` endpoint before actual TTS generation.
 
 ## Quick Start
 

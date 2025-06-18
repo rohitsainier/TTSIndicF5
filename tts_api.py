@@ -22,6 +22,10 @@ import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from config import get_config, validate_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG, API_CONFIG, LOGGING_CONFIG
+import re
+from pydub import AudioSegment
+from pydub.utils import make_chunks
+import tempfile
 
 # Configure logging
 config = get_config()
@@ -412,27 +416,81 @@ async def text_to_speech(request: TTSRequest):
                 detail=f"Prompt key '{request.prompt_key}' not found. Available keys: {list(prompts.keys())}"
             )
         
-        # Generate audio
-        audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
-        
-        # Normalize audio if requested
-        if request.normalize:
-            if audio.dtype == np.int16:
-                audio = audio.astype(np.float32) / 32768.0
-        
         # Ensure output directory exists
         os.makedirs(PATHS["output_dir"], exist_ok=True)
         
-        # Generate filename and save to disk
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
-        file_path = os.path.join(PATHS["output_dir"], filename)
+        # Check if text needs to be chunked (more than 300 characters)
+        if len(request.text) > 300:
+            logger.info(f"Text length {len(request.text)} > 300 chars, splitting into chunks")
+            
+            # Split text into chunks
+            text_chunks = split_text_into_chunks(request.text, max_chars=300)
+            logger.info(f"Split text into {len(text_chunks)} chunks")
+            
+            # Generate audio for each chunk
+            temp_audio_files = []
+            try:
+                for i, chunk in enumerate(text_chunks):
+                    logger.info(f"Processing chunk {i+1}/{len(text_chunks)}: {chunk[:50]}...")
+                    
+                    # Generate audio for this chunk
+                    chunk_audio, prompt_info = await generate_audio_async(chunk, request.prompt_key)
+                    
+                    # Normalize audio if requested
+                    if request.normalize:
+                        if chunk_audio.dtype == np.int16:
+                            chunk_audio = chunk_audio.astype(np.float32) / 32768.0
+                    
+                    # Save chunk to temporary file
+                    temp_filename = f"temp_chunk_{i}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
+                    temp_file_path = os.path.join(PATHS["output_dir"], temp_filename)
+                    sf.write(temp_file_path, np.array(chunk_audio, dtype=np.float32), samplerate=request.sample_rate)
+                    temp_audio_files.append(temp_file_path)
+                
+                # Generate final filename
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"tts_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
+                file_path = os.path.join(PATHS["output_dir"], filename)
+                
+                # Combine all audio chunks into single file
+                success = combine_audio_files(temp_audio_files, file_path, request.sample_rate)
+                if not success:
+                    raise Exception("Failed to combine audio chunks")
+                
+                # Load the combined audio for base64 conversion
+                combined_audio, sr = sf.read(file_path)
+                audio_base64 = audio_to_base64(combined_audio, request.sample_rate, request.output_format)
+                
+                # Clean up temporary files
+                cleanup_temp_files(temp_audio_files)
+                
+            except Exception as e:
+                # Clean up temporary files in case of error
+                cleanup_temp_files(temp_audio_files)
+                raise e
         
-        # Save audio file to disk
-        sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
-        
-        # Convert to base64 for response
-        audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
+        else:
+            # Process single text (original logic)
+            logger.info(f"Text length {len(request.text)} <= 300 chars, processing as single chunk")
+            
+            # Generate audio
+            audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
+            
+            # Normalize audio if requested
+            if request.normalize:
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32768.0
+            
+            # Generate filename and save to disk
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
+            file_path = os.path.join(PATHS["output_dir"], filename)
+            
+            # Save audio file to disk
+            sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+            
+            # Convert to base64 for response
+            audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
         
         # Add file metadata
         add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
@@ -469,24 +527,78 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
     
     for i, request in enumerate(batch_request.requests):
         try:
-            # Generate audio for this request
-            audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
+            # Check if text needs to be chunked
+            if len(request.text) > 300:
+                logger.info(f"Batch request {i}: Text length {len(request.text)} > 300 chars, splitting into chunks")
+                
+                # Split text into chunks
+                text_chunks = split_text_into_chunks(request.text, max_chars=300)
+                logger.info(f"Batch request {i}: Split text into {len(text_chunks)} chunks")
+                
+                # Generate audio for each chunk
+                temp_audio_files = []
+                try:
+                    for j, chunk in enumerate(text_chunks):
+                        logger.info(f"Batch request {i}: Processing chunk {j+1}/{len(text_chunks)}")
+                        
+                        # Generate audio for this chunk
+                        chunk_audio, prompt_info = await generate_audio_async(chunk, request.prompt_key)
+                        
+                        # Normalize audio if requested
+                        if request.normalize:
+                            if chunk_audio.dtype == np.int16:
+                                chunk_audio = chunk_audio.astype(np.float32) / 32768.0
+                        
+                        # Save chunk to temporary file
+                        temp_filename = f"temp_batch_{i}_chunk_{j}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
+                        temp_file_path = os.path.join(PATHS["output_dir"], temp_filename)
+                        sf.write(temp_file_path, np.array(chunk_audio, dtype=np.float32), samplerate=request.sample_rate)
+                        temp_audio_files.append(temp_file_path)
+                    
+                    # Generate final filename
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
+                    file_path = os.path.join(PATHS["output_dir"], filename)
+                    
+                    # Combine all audio chunks into single file
+                    success = combine_audio_files(temp_audio_files, file_path, request.sample_rate)
+                    if not success:
+                        raise Exception("Failed to combine audio chunks")
+                    
+                    # Load the combined audio for base64 conversion
+                    combined_audio, sr = sf.read(file_path)
+                    audio_base64 = audio_to_base64(combined_audio, request.sample_rate, request.output_format)
+                    
+                    # Clean up temporary files
+                    cleanup_temp_files(temp_audio_files)
+                    
+                except Exception as e:
+                    # Clean up temporary files in case of error
+                    cleanup_temp_files(temp_audio_files)
+                    raise e
             
-            # Normalize audio if requested
-            if request.normalize:
-                if audio.dtype == np.int16:
-                    audio = audio.astype(np.float32) / 32768.0
-            
-            # Generate filename and save to disk
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
-            file_path = os.path.join(PATHS["output_dir"], filename)
-            
-            # Save audio file to disk
-            sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
-            
-            # Convert to base64 for response
-            audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
+            else:
+                # Process single text (original logic)
+                logger.info(f"Batch request {i}: Text length {len(request.text)} <= 300 chars, processing as single chunk")
+                
+                # Generate audio for this request
+                audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
+                
+                # Normalize audio if requested
+                if request.normalize:
+                    if audio.dtype == np.int16:
+                        audio = audio.astype(np.float32) / 32768.0
+                
+                # Generate filename and save to disk
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
+                file_path = os.path.join(PATHS["output_dir"], filename)
+                
+                # Save audio file to disk
+                sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+                
+                # Convert to base64 for response
+                audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
             
             # Add file metadata
             add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
@@ -1020,3 +1132,131 @@ if __name__ == "__main__":
         logger.error("uvicorn not installed. Please install with: pip install uvicorn[standard]")
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
+
+def split_text_into_chunks(text: str, max_chars: int = 300) -> List[str]:
+    """Split text into chunks of maximum character length, preserving sentence structure"""
+    if len(text) <= max_chars:
+        return [text]
+    
+    chunks = []
+    current_chunk = ""
+    
+    # Split by sentences first (using period, exclamation, question mark)
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    
+    for sentence in sentences:
+        # If a single sentence is longer than max_chars, split it further
+        if len(sentence) > max_chars:
+            # Split by commas or other punctuation
+            sub_parts = re.split(r'(?<=[,;:])\s+', sentence)
+            for part in sub_parts:
+                if len(part) > max_chars:
+                    # If still too long, split by words
+                    words = part.split()
+                    temp_chunk = ""
+                    for word in words:
+                        if len(temp_chunk + " " + word) <= max_chars:
+                            temp_chunk = temp_chunk + " " + word if temp_chunk else word
+                        else:
+                            if temp_chunk:
+                                chunks.append(temp_chunk.strip())
+                            temp_chunk = word
+                    if temp_chunk:
+                        if len(current_chunk + " " + temp_chunk) <= max_chars:
+                            current_chunk = current_chunk + " " + temp_chunk if current_chunk else temp_chunk
+                        else:
+                            if current_chunk:
+                                chunks.append(current_chunk.strip())
+                            current_chunk = temp_chunk
+                else:
+                    if len(current_chunk + " " + part) <= max_chars:
+                        current_chunk = current_chunk + " " + part if current_chunk else part
+                    else:
+                        if current_chunk:
+                            chunks.append(current_chunk.strip())
+                        current_chunk = part
+        else:
+            # Check if adding this sentence would exceed max_chars
+            if len(current_chunk + " " + sentence) <= max_chars:
+                current_chunk = current_chunk + " " + sentence if current_chunk else sentence
+            else:
+                if current_chunk:
+                    chunks.append(current_chunk.strip())
+                current_chunk = sentence
+    
+    # Add any remaining text
+    if current_chunk:
+        chunks.append(current_chunk.strip())
+    
+    # Filter out empty chunks
+    chunks = [chunk for chunk in chunks if chunk.strip()]
+    
+    return chunks
+
+def combine_audio_files(audio_files: List[str], output_path: str, sample_rate: int = 24000) -> bool:
+    """Combine multiple audio files into a single file"""
+    try:
+        combined_audio = AudioSegment.empty()
+        
+        for audio_file in audio_files:
+            if os.path.exists(audio_file):
+                # Load audio file
+                audio_segment = AudioSegment.from_wav(audio_file)
+                
+                # Set frame rate to ensure consistency
+                audio_segment = audio_segment.set_frame_rate(sample_rate)
+                
+                # Add to combined audio
+                combined_audio += audio_segment
+                
+                # Add a small pause between chunks (100ms)
+                silence = AudioSegment.silent(duration=100)
+                combined_audio += silence
+        
+        # Remove the last silence
+        if len(combined_audio) > 100:
+            combined_audio = combined_audio[:-100]
+        
+        # Export combined audio
+        combined_audio.export(output_path, format="wav")
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error combining audio files: {str(e)}")
+        return False
+
+def cleanup_temp_files(file_paths: List[str]):
+    """Clean up temporary audio files"""
+    for file_path in file_paths:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except Exception as e:
+            logger.warning(f"Failed to remove temporary file {file_path}: {str(e)}")
+
+# Add test endpoint for chunking demo
+@api_router.post("/tts/chunk-demo")
+async def chunk_demo(text: str):
+    """Demo endpoint to show how text would be chunked"""
+    try:
+        chunks = split_text_into_chunks(text, max_chars=300)
+        
+        return {
+            "success": True,
+            "original_text": text,
+            "original_length": len(text),
+            "will_be_chunked": len(text) > 300,
+            "num_chunks": len(chunks),
+            "chunks": [
+                {
+                    "chunk_number": i + 1,
+                    "text": chunk,
+                    "length": len(chunk)
+                }
+                for i, chunk in enumerate(chunks)
+            ],
+            "message": f"Text {'will be split into' if len(chunks) > 1 else 'will be processed as'} {len(chunks)} chunk{'s' if len(chunks) > 1 else ''}"
+        }
+    except Exception as e:
+        logger.error(f"Chunk demo failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Chunk demo failed: {str(e)}")

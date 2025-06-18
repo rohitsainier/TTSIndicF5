@@ -50,18 +50,29 @@ def test_get_prompts():
         return []
 
 def test_single_tts(prompt_keys):
-    """Test single TTS request"""
-    print("=== Testing Single TTS Request ===")
+    """Test single TTS request with chunking support"""
+    print("=== Testing Single TTS Request (with Chunking) ===")
     
     if not prompt_keys:
         print("No prompts available for testing")
         return
     
+    # Test with a long text that will trigger chunking
+    long_text = ("కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి. " +
+                "రైతు వాటిని భయపెట్టడానికి వివిధ మార్గాలను అనుసరించాడు కానీ కాకులు తిరిగి వచ్చాయి. " +
+                "చివరికి రైతు ఒక తెలివైన పథకం రూపొందించాడు మరియు అతను కాకులను పరిష్కరించగలిగాడు. " +
+                "ఈ కథ మనకు సహనం మరియు తెలివితేటల గురించి బోధిస్తుంది. " +
+                "ఇది 300 అక్షరాలకు మించిన పాఠ్యం కాబట్టి ఇది స్వయంచాలకంగా అనేక భాగాలుగా విభజించబడుతుంది.")
+    
+    print(f"Text length: {len(long_text)} characters")
+    print(f"Text preview: {long_text[:100]}...")
+    print(f"Will be automatically chunked: {'Yes' if len(long_text) > 300 else 'No'}")
+    
     # Use the first available prompt
     prompt_key = prompt_keys[0]
     
     request_data = {
-        "text": "కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.",
+        "text": long_text,
         "prompt_key": prompt_key,
         "output_format": "wav",
         "sample_rate": 24000,
@@ -76,6 +87,10 @@ def test_single_tts(prompt_keys):
         print("✓ TTS generation successful")
         print(f"  Duration: {data['duration']:.2f} seconds")
         print(f"  Filename: {data['filename']}")
+        
+        # Check if filename indicates it was combined (chunked)
+        if "combined" in data['filename']:
+            print("  ✓ Text was automatically chunked and audio combined")
         
         # Save audio file
         os.makedirs("client_output", exist_ok=True)
@@ -174,6 +189,34 @@ def test_save_tts(prompt_keys):
         print(response.text)
     print()
 
+def test_chunk_demo():
+    """Test the text chunking demo endpoint"""
+    print("=== Testing Text Chunking Demo ===")
+    
+    # Test with different text lengths
+    test_texts = [
+        "Short text that won't be chunked.",
+        "This is a medium-length text that approaches but doesn't exceed the 300-character limit for automatic chunking, so it should be processed as a single unit without any splitting or combining of audio files.",
+        "This is a very long text that definitely exceeds the 300-character limit and will be automatically split into multiple chunks by the TTS API. The intelligent chunking algorithm will split this text at sentence boundaries first, then at punctuation marks like commas and semicolons, and finally by words if absolutely necessary. This ensures that the resulting audio maintains completely natural speech patterns without breaking words or sentences in awkward places during the text-to-speech conversion process.",
+    ]
+    
+    for i, text in enumerate(test_texts):
+        print(f"\n--- Test Text {i+1} ({len(text)} chars) ---")
+        print(f"Text: {text[:80]}{'...' if len(text) > 80 else ''}")
+        
+        response = requests.post(f"{API_BASE_URL}/tts/chunk-demo", params={"text": text})
+        if response.status_code == 200:
+            result = response.json()
+            print(f"✓ Will be chunked: {result['will_be_chunked']}")
+            print(f"✓ Number of chunks: {result['num_chunks']}")
+            
+            for chunk in result['chunks']:
+                chunk_preview = chunk['text'][:60] + ('...' if len(chunk['text']) > 60 else '')
+                print(f"  Chunk {chunk['chunk_number']} ({chunk['length']} chars): {chunk_preview}")
+        else:
+            print(f"✗ Error: {response.text}")
+    print()
+
 def main():
     """Main function to run all tests"""
     print("TTS IndicF5 API Client Test")
@@ -182,6 +225,9 @@ def main():
     # Test health check
     test_health_check()
     
+    # Test text chunking demo
+    test_chunk_demo()
+    
     # Get available prompts
     prompt_keys = test_get_prompts()
     
@@ -189,7 +235,7 @@ def main():
         print("No prompts available. Cannot proceed with TTS tests.")
         return
     
-    # Test single TTS
+    # Test single TTS (with chunking support)
     test_single_tts(prompt_keys)
     
     # Test batch TTS
@@ -197,6 +243,9 @@ def main():
     
     # Test server-side save
     test_save_tts(prompt_keys)
+    
+    # Test chunk demo
+    test_chunk_demo()
     
     print("All tests completed!")
 
