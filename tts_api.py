@@ -14,6 +14,13 @@ from datetime import datetime
 from transformers import AutoModel
 import logging
 from contextlib import asynccontextmanager
+# System monitoring imports
+import psutil
+import GPUtil
+import time
+# Async support imports
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from config import get_config, validate_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG, API_CONFIG, LOGGING_CONFIG
 
 # Configure logging
@@ -28,6 +35,9 @@ logger = logging.getLogger(__name__)
 # Global variables for model and prompts
 model = None
 prompts = {}
+
+# Thread pool executor for CPU-intensive tasks
+executor = ThreadPoolExecutor(max_workers=2)  # Limit to 2 workers to prevent overload
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -65,6 +75,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown
     logger.info("Shutting down...")
+    executor.shutdown(wait=True)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -290,6 +301,11 @@ def generate_audio(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, An
     
     return audio, prompt_info
 
+async def generate_audio_async(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
+    """Async wrapper for generate_audio to run in thread pool"""
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, generate_audio, text, prompt_key)
+
 # API Routes
 @app.get("/")
 async def root():
@@ -397,7 +413,7 @@ async def text_to_speech(request: TTSRequest):
             )
         
         # Generate audio
-        audio, prompt_info = generate_audio(request.text, request.prompt_key)
+        audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
         
         # Normalize audio if requested
         if request.normalize:
@@ -454,7 +470,7 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
     for i, request in enumerate(batch_request.requests):
         try:
             # Generate audio for this request
-            audio, prompt_info = generate_audio(request.text, request.prompt_key)
+            audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
             
             # Normalize audio if requested
             if request.normalize:
@@ -938,6 +954,47 @@ async def clear_all_file_metadata():
     except Exception as e:
         logger.error(f"Failed to clear all file metadata: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to clear file metadata: {str(e)}")
+
+# System monitoring endpoint
+@api_router.get("/system/monitor")
+async def system_monitor():
+    """Get system CPU, memory, and GPU usage"""
+    try:
+        # CPU usage
+        cpu_usage = psutil.cpu_percent(interval=1)
+        
+        # Memory usage
+        memory_info = psutil.virtual_memory()
+        memory_usage = memory_info.percent
+        memory_total = memory_info.total
+        memory_available = memory_info.available
+        
+        # GPU usage (if available)
+        gpu_usage = 0
+        gpu_memory_total = 0
+        gpu_memory_free = 0
+        gpu_memory_used = 0
+        gpus = GPUtil.getGPUs()
+        if gpus:
+            gpu_usage = gpus[0].load * 100
+            gpu_memory_total = gpus[0].memoryTotal
+            gpu_memory_free = gpus[0].memoryFree
+            gpu_memory_used = gpus[0].memoryUsed
+        
+        return {
+            "success": True,
+            "cpu_usage": cpu_usage,
+            "memory_usage": memory_usage,
+            "memory_total": memory_total,
+            "memory_available": memory_available,
+            "gpu_usage": gpu_usage,
+            "gpu_memory_total": gpu_memory_total,
+            "gpu_memory_free": gpu_memory_free,
+            "gpu_memory_used": gpu_memory_used
+        }
+    except Exception as e:
+        logger.error(f"Failed to get system monitor data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get system monitor data: {str(e)}")
 
 # Include API router first (before static mounts) to ensure API routes take precedence
 app.include_router(api_router)

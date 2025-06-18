@@ -220,6 +220,60 @@
           <div class="loading-spinner w-8 h-8 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
           </div>
           <span class="text-chalk-300">Generating speech...</span>
+
+          <!-- System Stats Display -->
+          <div id="systemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h4 class="text-sm font-semibold text-chalk-200 mb-3">📊 System Usage</h4>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <!-- CPU Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">CPU:</span>
+                  <span id="cpuUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="cpuBar" class="bg-chalk-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Memory Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">Memory:</span>
+                  <span id="memoryUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="memoryBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- GPU Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">GPU:</span>
+                  <span id="gpuUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="gpuBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
+                  </div>
+                </div>
+              </div>
+
+              <!-- GPU Memory -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">GPU Mem:</span>
+                  <span id="gpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="gpuMemoryBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                    style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div id="singleResult" class="hidden mt-4 p-4 rounded-lg"></div>
@@ -245,6 +299,60 @@
               class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
             </div>
             <span class="text-chalk-300">Processing batch...</span>
+
+            <!-- System Stats Display for Batch -->
+            <div id="batchSystemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-3">
+              <h4 class="text-sm font-semibold text-chalk-200 mb-2">📊 System Usage</h4>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <!-- CPU Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">CPU:</span>
+                    <span id="batchCpuUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchCpuBar" class="bg-chalk-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- Memory Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">Memory:</span>
+                    <span id="batchMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchMemoryBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- GPU Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">GPU:</span>
+                    <span id="batchGpuUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchGpuBar" class="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- GPU Memory -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">GPU Mem:</span>
+                    <span id="batchGpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchGpuMemoryBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div id="batchResult" class="hidden mt-4"></div>
         </div>
@@ -564,6 +672,9 @@
       loadingDiv.style.display = 'block';
       submitBtn.disabled = true;
 
+      // Start system monitoring
+      startSystemMonitoring();
+
       try {
         const response = await fetch( `${API_BASE}/tts`, {
           method: 'POST',
@@ -580,6 +691,10 @@
         } );
 
         const data = await response.json();
+
+        // Stop system monitoring
+        stopSystemMonitoring();
+
         loadingDiv.style.display = 'none';
         submitBtn.disabled = false;
 
@@ -622,6 +737,9 @@
         }
 
       } catch ( error ) {
+        // Stop system monitoring on error
+        stopSystemMonitoring();
+
         loadingDiv.style.display = 'none';
         submitBtn.disabled = false;
         resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
@@ -696,6 +814,9 @@
       resultDiv.style.display = 'none';
       loadingDiv.style.display = 'block';
 
+      // Start system monitoring for batch processing
+      startSystemMonitoring( 'batch' );
+
       try {
         const response = await fetch( `${API_BASE}/tts/batch`, {
           method: 'POST',
@@ -709,6 +830,10 @@
         } );
 
         const data = await response.json();
+
+        // Stop system monitoring
+        stopSystemMonitoring();
+
         loadingDiv.style.display = 'none';
 
         if ( response.ok ) {
@@ -773,6 +898,9 @@
         }
 
       } catch ( error ) {
+        // Stop system monitoring on error
+        stopSystemMonitoring();
+
         loadingDiv.style.display = 'none';
         resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
         resultDiv.innerHTML = `
@@ -1167,6 +1295,139 @@
       }
     }
 
+    // System monitoring variables
+    let systemMonitorInterval = null;
+
+    // System monitoring functions
+    async function fetchSystemStats() {
+      try {
+        const response = await fetch( `${API_BASE}/system/monitor` );
+        const data = await response.json();
+
+        if ( response.ok && data.success ) {
+          return data;
+        }
+        return null;
+      } catch ( error ) {
+        console.error( 'Failed to fetch system stats:', error );
+        return null;
+      }
+    }
+
+    function updateSystemStatsDisplay( stats, prefix = '' ) {
+      if ( !stats ) return;
+
+      // Debug: Log the stats to console
+      console.log( 'System stats:', stats );
+
+      // Update CPU usage
+      const cpuUsageEl = document.getElementById( `${prefix}cpuUsage` );
+      const cpuBarEl = document.getElementById( `${prefix}cpuBar` );
+      if ( cpuUsageEl && cpuBarEl ) {
+        cpuUsageEl.textContent = `${stats.cpu_usage.toFixed( 1 )}%`;
+        cpuBarEl.style.width = `${stats.cpu_usage}%`;
+
+        // Update bar color based on usage
+        if ( stats.cpu_usage > 80 ) {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+        } else if ( stats.cpu_usage > 60 ) {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        } else {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-chalk-500' );
+        }
+      }
+
+      // Update Memory usage
+      const memoryUsageEl = document.getElementById( `${prefix}memoryUsage` );
+      const memoryBarEl = document.getElementById( `${prefix}memoryBar` );
+      if ( memoryUsageEl && memoryBarEl ) {
+        memoryUsageEl.textContent = `${stats.memory_usage.toFixed( 1 )}%`;
+        memoryBarEl.style.width = `${stats.memory_usage}%`;
+
+        // Update bar color based on usage
+        if ( stats.memory_usage > 80 ) {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+        } else if ( stats.memory_usage > 60 ) {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        } else {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-blue-500' );
+        }
+      }
+
+      // Update GPU usage
+      const gpuUsageEl = document.getElementById( `${prefix}gpuUsage` );
+      const gpuBarEl = document.getElementById( `${prefix}gpuBar` );
+      if ( gpuUsageEl && gpuBarEl ) {
+        if ( stats.gpu_usage !== undefined && stats.gpu_usage !== null ) {
+          gpuUsageEl.textContent = `${stats.gpu_usage.toFixed( 1 )}%`;
+          gpuBarEl.style.width = `${stats.gpu_usage}%`;
+
+          // Update bar color based on usage
+          if ( stats.gpu_usage > 80 ) {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+          } else if ( stats.gpu_usage > 60 ) {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          } else {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-green-500' );
+          }
+        } else {
+          gpuUsageEl.textContent = 'N/A';
+          gpuBarEl.style.width = '0%';
+        }
+      }
+
+      // Update GPU Memory usage
+      const gpuMemoryUsageEl = document.getElementById( `${prefix}gpuMemoryUsage` );
+      const gpuMemoryBarEl = document.getElementById( `${prefix}gpuMemoryBar` );
+      if ( gpuMemoryUsageEl && gpuMemoryBarEl ) {
+        if ( stats.gpu_memory_total !== undefined && stats.gpu_memory_total !== null && stats.gpu_memory_total > 0 ) {
+          const gpuMemoryPercent = ( stats.gpu_memory_used / stats.gpu_memory_total ) * 100;
+          gpuMemoryUsageEl.textContent = `${gpuMemoryPercent.toFixed( 1 )}%`;
+          gpuMemoryBarEl.style.width = `${gpuMemoryPercent}%`;
+
+          // Update bar color based on usage
+          if ( gpuMemoryPercent > 80 ) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+          } else if ( gpuMemoryPercent > 60 ) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          } else {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-purple-500' );
+          }
+        } else {
+          gpuMemoryUsageEl.textContent = 'N/A';
+          gpuMemoryBarEl.style.width = '0%';
+        }
+      }
+    }
+
+    function startSystemMonitoring( prefix = '' ) {
+      console.log( 'Starting system monitoring with prefix:', prefix );
+
+      if ( systemMonitorInterval ) {
+        clearInterval( systemMonitorInterval );
+      }
+
+      // Initial fetch
+      fetchSystemStats().then( stats => {
+        console.log( 'Initial system stats:', stats );
+        updateSystemStatsDisplay( stats, prefix );
+      } );
+
+      // Set up interval for updates every 2 seconds
+      systemMonitorInterval = setInterval( async () => {
+        const stats = await fetchSystemStats();
+        updateSystemStatsDisplay( stats, prefix );
+      }, 2000 );
+    }
+
+    function stopSystemMonitoring() {
+      if ( systemMonitorInterval ) {
+        clearInterval( systemMonitorInterval );
+        systemMonitorInterval = null;
+      }
+    }
+
+    // ...existing code...
   </script>
 </body>
 
