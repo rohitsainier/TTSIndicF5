@@ -30,9 +30,9 @@ AUDIO_CONFIG = {
 
 # File Paths
 PATHS = {
-    "prompts_file": os.getenv("PROMPTS_FILE", "data/prompts/prompts.json"),
-    "prompts_dir": os.getenv("PROMPTS_DIR", "data/prompts"),
-    "output_dir": os.getenv("OUTPUT_DIR", "data/out"),
+    "prompts_file": os.getenv("PROMPTS_FILE", "./data/prompts/prompts.json"),
+    "prompts_dir": os.getenv("PROMPTS_DIR", "./data/prompts"),
+    "output_dir": os.getenv("OUTPUT_DIR", "./data/out"),
     "temp_dir": os.getenv("TEMP_DIR", "/tmp/tts_api"),
 }
 

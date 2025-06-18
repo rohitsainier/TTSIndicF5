@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Response, APIRouter
+from fastapi import FastAPI, HTTPException, Response, APIRouter, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -230,6 +230,31 @@ async def get_prompts():
         total_count=len(prompts)
     )
 
+@api_router.get("/prompts/{prompt_key}/audio")
+async def get_prompt_audio(prompt_key: str):
+    """Get audio file for a specific prompt"""
+    if prompt_key not in prompts:
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Prompt key '{prompt_key}' not found"
+        )
+    
+    prompt_info = prompts[prompt_key]
+    audio_file_path = f"{PATHS['prompts_dir']}/{prompt_info['file']}"
+
+    # Check if file exists
+    if not os.path.exists(audio_file_path):
+        raise HTTPException(
+            status_code=404, 
+            detail=f"Audio file not found: {audio_file_path}"
+        )
+    
+    return FileResponse(
+        path=audio_file_path,
+        media_type="audio/wav",
+        filename=os.path.basename(audio_file_path)
+    )
+
 @api_router.post("/tts", response_model=TTSResponse)
 async def text_to_speech(request: TTSRequest):
     """Convert single text to speech"""
@@ -251,15 +276,22 @@ async def text_to_speech(request: TTSRequest):
             if audio.dtype == np.int16:
                 audio = audio.astype(np.float32) / 32768.0
         
-        # Convert to base64
+        # Ensure output directory exists
+        os.makedirs(PATHS["output_dir"], exist_ok=True)
+        
+        # Generate filename and save to disk
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        
+        # Save audio file to disk
+        sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+        
+        # Convert to base64 for response
         audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
         
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        
-        # Generate filename
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
         
         return TTSResponse(
             success=True,
@@ -285,6 +317,9 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
     failed_requests = 0
     start_time = datetime.now()
     
+    # Ensure output directory exists
+    os.makedirs(PATHS["output_dir"], exist_ok=True)
+    
     for i, request in enumerate(batch_request.requests):
         try:
             # Generate audio for this request
@@ -295,12 +330,16 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
                 if audio.dtype == np.int16:
                     audio = audio.astype(np.float32) / 32768.0
             
-            # Convert to base64
-            audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
-            
-            # Generate filename
+            # Generate filename and save to disk
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
+            file_path = os.path.join(PATHS["output_dir"], filename)
+            
+            # Save audio file to disk
+            sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+            
+            # Convert to base64 for response
+            audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
             
             results.append(TTSResponse(
                 success=True,
@@ -333,52 +372,256 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
         total_duration=total_duration
     )
 
-@api_router.post("/tts/save")
-async def text_to_speech_save(request: TTSRequest):
-    """Convert text to speech and save to file"""
+# New file management endpoints
+class FileInfo(BaseModel):
+    filename: str
+    filepath: str
+    size: int
+    created_time: str
+    format: str
+
+class FilesListResponse(BaseModel):
+    files: List[FileInfo]
+    total_count: int
+    total_size: int
+
+@api_router.get("/files", response_model=FilesListResponse)
+async def list_generated_files():
+    """List all generated audio files"""
     try:
-        # Validate prompt key
-        if request.prompt_key not in prompts:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Prompt key '{request.prompt_key}' not found"
-            )
+        output_dir = PATHS["output_dir"]
+        if not os.path.exists(output_dir):
+            return FilesListResponse(files=[], total_count=0, total_size=0)
         
-        # Generate audio
-        audio, prompt_info = generate_audio(request.text, request.prompt_key)
+        files = []
+        total_size = 0
         
-        # Normalize audio if requested
-        if request.normalize:
-            if audio.dtype == np.int16:
-                audio = audio.astype(np.float32) / 32768.0
+        for filename in os.listdir(output_dir):
+            file_path = os.path.join(output_dir, filename)
+            if os.path.isfile(file_path) and filename.lower().endswith(('.wav', '.mp3', '.flac')):
+                file_stat = os.stat(file_path)
+                file_size = file_stat.st_size
+                total_size += file_size
+                
+                # Get file format from extension
+                file_format = filename.split('.')[-1].lower()
+                
+                files.append(FileInfo(
+                    filename=filename,
+                    filepath=file_path,
+                    size=file_size,
+                    created_time=datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                    format=file_format
+                ))
         
-        # Ensure output directory exists
-        os.makedirs(PATHS["output_dir"], exist_ok=True)
+        # Sort by creation time (newest first)
+        files.sort(key=lambda x: x.created_time, reverse=True)
         
-        # Generate filename and save
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{PATHS['output_dir']}/tts_{request.prompt_key}_{timestamp}.{request.output_format}"
+        return FilesListResponse(
+            files=files,
+            total_count=len(files),
+            total_size=total_size
+        )
         
-        sf.write(filename, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+    except Exception as e:
+        logger.error(f"Failed to list files: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list files: {str(e)}")
+
+@api_router.get("/files/{filename}")
+async def download_file(filename: str):
+    """Download a generated audio file"""
+    try:
+        # Sanitize filename to prevent directory traversal
+        filename = os.path.basename(filename)
+        
+        # Check if file has a valid audio extension
+        valid_extensions = {'.wav', '.mp3', '.flac'}
+        file_ext = '.' + filename.lower().split('.')[-1] if '.' in filename else ''
+        if file_ext not in valid_extensions:
+            logger.warning(f"Invalid file extension requested: {filename}")
+            raise HTTPException(status_code=403, detail="Only audio files are allowed")
+        
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        
+        # Convert to absolute paths for comparison
+        abs_file_path = os.path.abspath(file_path)
+        abs_output_dir = os.path.abspath(PATHS["output_dir"])
+        
+        # Security check - ensure the file is in the output directory
+        if not abs_file_path.startswith(abs_output_dir):
+            logger.warning(f"Security check failed for file: {filename}")
+            raise HTTPException(status_code=403, detail="Access denied - file outside allowed directory")
+        
+        if not os.path.exists(abs_file_path):
+            logger.warning(f"File not found: {abs_file_path}")
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if not os.path.isfile(abs_file_path):
+            logger.warning(f"Path is not a file: {abs_file_path}")
+            raise HTTPException(status_code=404, detail="Path is not a file")
+        
+        # Determine media type based on file extension
+        media_type_map = {
+            '.wav': 'audio/wav',
+            '.mp3': 'audio/mpeg',
+            '.flac': 'audio/flac'
+        }
+        media_type = media_type_map.get(file_ext, 'application/octet-stream')
+        
+        logger.info(f"Serving file: {abs_file_path}")
+        return FileResponse(
+            path=abs_file_path,
+            media_type=media_type,
+            filename=filename
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to download file {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to download file: {str(e)}")
+
+@api_router.delete("/files/{filename}")
+async def delete_file(filename: str):
+    """Delete a generated audio file"""
+    try:
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        
+        # Security check - ensure the file is in the output directory
+        if not os.path.commonpath([file_path, PATHS["output_dir"]]) == PATHS["output_dir"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        os.remove(file_path)
         
         return {
             "success": True,
-            "filename": filename,
-            "message": "Audio file saved successfully",
-            "prompt_info": prompt_info
+            "message": f"File {filename} deleted successfully"
         }
         
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"TTS save failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"TTS save failed: {str(e)}")
+        logger.error(f"Failed to delete file {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {str(e)}")
 
-# Include API router after all routes are defined
+@api_router.delete("/files")
+async def clear_all_files():
+    """Delete all generated audio files"""
+    try:
+        output_dir = PATHS["output_dir"]
+        if not os.path.exists(output_dir):
+            return {
+                "success": True,
+                "message": "No files to delete",
+                "deleted_count": 0
+            }
+        
+        deleted_count = 0
+        for filename in os.listdir(output_dir):
+            file_path = os.path.join(output_dir, filename)
+            if os.path.isfile(file_path) and filename.lower().endswith(('.wav', '.mp3', '.flac')):
+                os.remove(file_path)
+                deleted_count += 1
+        
+        return {
+            "success": True,
+            "message": f"Deleted {deleted_count} files successfully",
+            "deleted_count": deleted_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to clear files: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear files: {str(e)}")
+
+# Add upload and delete endpoints for prompts
+@api_router.post("/prompts/upload")
+async def upload_prompt(file: UploadFile = File(...), name: str = Form(...), author: str = Form(...), content: str = Form("")):
+    """Upload a new prompt audio file"""
+    try:
+        # Validate file type
+        if not file.content_type.startswith('audio/'):
+            raise HTTPException(status_code=400, detail="File must be an audio file")
+        
+        # Ensure prompts directory exists
+        os.makedirs(PATHS["prompts_dir"], exist_ok=True)
+        
+        # Generate filename
+        file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else 'wav'
+        safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"{safe_name}.{file_extension}"
+        file_path = os.path.join(PATHS["prompts_dir"], filename)
+        
+        # Save file
+        with open(file_path, "wb") as buffer:
+            content_bytes = await file.read()
+            buffer.write(content_bytes)
+        
+        # Update prompts.json
+        prompt_key = safe_name.lower().replace(' ', '_')
+        prompts[prompt_key] = {
+            "author": author,
+            "content": content or f"Sample content for {name}",
+            "file": filename,
+            "sample_rate": AUDIO_CONFIG["default_sample_rate"]
+        }
+        
+        # Save updated prompts.json
+        with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
+            json.dump(prompts, f, indent=2, ensure_ascii=False)
+        
+        return {
+            "success": True,
+            "message": f"Prompt '{name}' uploaded successfully",
+            "prompt_key": prompt_key
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to upload prompt: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload prompt: {str(e)}")
+
+@api_router.delete("/prompts/{prompt_key}")
+async def delete_prompt(prompt_key: str):
+    """Delete a prompt"""
+    try:
+        if prompt_key not in prompts:
+            raise HTTPException(status_code=404, detail=f"Prompt key '{prompt_key}' not found")
+        
+        # Remove audio file
+        prompt_info = prompts[prompt_key]
+        audio_file_path = os.path.join(PATHS["prompts_dir"], prompt_info["file"])
+        if os.path.exists(audio_file_path):
+            os.remove(audio_file_path)
+        
+        # Remove from prompts dict
+        del prompts[prompt_key]
+        
+        # Save updated prompts.json
+        with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
+            json.dump(prompts, f, indent=2, ensure_ascii=False)
+        
+        return {
+            "success": True,
+            "message": f"Prompt '{prompt_key}' deleted successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete prompt {prompt_key}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete prompt: {str(e)}")
+
+# Include API router first (before static mounts) to ensure API routes take precedence
 app.include_router(api_router)
 
-# Mount static files for web interface
-app.mount("/static", StaticFiles(directory="static"), name="static")
+# Mount static files for web interface (after API routes to avoid conflicts)
+if os.path.exists("static"):
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Note: Removed /data mount to avoid conflicts with /api/files endpoints
+# Files should be accessed through /api/files/{filename} instead
 
 if __name__ == "__main__":
     try:

@@ -48,43 +48,16 @@ Open your browser and go to:
 
 ## API Endpoints
 
-### Health Check
+### Core TTS Endpoints
 
-```http
-GET /api/health
-```
+### `POST /api/tts`
+Convert single text to speech. Audio files are automatically saved to the server's output directory.
 
-Check if the API is running and model is loaded.
-
-### Get Available Prompts
-
-```http
-GET /api/prompts
-```
-
-Returns all available voice prompts with their metadata.
-
-### Web Interface
-
-```http
-GET /web
-```
-
-Serves the built-in web interface for testing the API.
-
-### Single TTS Request
-
-```http
-POST /api/tts
-```
-
-Convert a single text to speech.
-
-**Request Body:**
+**Request:**
 ```json
 {
-  "text": "కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.",
-  "prompt_key": "TEL_F_WIKI_00001",
+  "text": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
+  "prompt_key": "hin_f_happy",
   "output_format": "wav",
   "sample_rate": 24000,
   "normalize": true
@@ -95,42 +68,37 @@ Convert a single text to speech.
 ```json
 {
   "success": true,
-  "audio_base64": "UklGRiQEAABXQVZFZm10IBAAAAABAAEA...",
-  "filename": "tts_TEL_F_WIKI_00001_20241217_143022.wav",
-  "duration": 2.35,
+  "audio_base64": "UklGRgABAABXQVZFZm10...",
+  "filename": "tts_hin_f_happy_20231201_143052.wav",
+  "duration": 2.45,
   "sample_rate": 24000,
   "message": "TTS generation successful",
   "prompt_info": {
-    "author": "AI Female Wiki Reader",
-    "content": "ఒక ఊరి లో ప్రతి సంవత్సరం...",
-    "file": "prompts/TEL_F_WIKI_00001.wav",
-    "sample_rate": 16000
+    "author": "AI4Bharat",
+    "content": "नमस्ते",
+    "file": "HIN_F_HAPPY_00001.wav",
+    "sample_rate": 24000
   }
 }
 ```
 
-### Batch TTS Request
+### `POST /api/tts/batch`
+Process multiple TTS requests in a single call. All generated files are saved to the server.
 
-```http
-POST /api/tts/batch
-```
-
-Process multiple TTS requests in a single call.
-
-**Request Body:**
+**Request:**
 ```json
 {
   "requests": [
     {
-      "text": "మొదటి వాక్యం - ఇది తెలుగు భాషలో ఉంది.",
-      "prompt_key": "TEL_F_WIKI_00001",
+      "text": "पहला वाक्य",
+      "prompt_key": "hin_f_happy",
       "output_format": "wav",
       "sample_rate": 24000,
       "normalize": true
     },
     {
-      "text": "दूसरा वाक्य - यह हिंदी में है।",
-      "prompt_key": "HIN_F_HAPPY_00001",
+      "text": "दूसरा वाक्य", 
+      "prompt_key": "hin_f_happy",
       "output_format": "wav",
       "sample_rate": 24000,
       "normalize": true
@@ -140,100 +108,121 @@ Process multiple TTS requests in a single call.
 }
 ```
 
-### Save TTS to Server
+### File Management Endpoints
 
-```http
-POST /api/tts/save
-```
+### `GET /api/files`
+List all generated audio files from the server's output directory.
 
-Generate TTS and save the audio file on the server.
-
-## Available Prompt Keys
-
-Based on the current prompts.json file:
-
-- `TEL_F_WIKI_00001` - Telugu Female Wiki Reader
-- `HIN_F_HAPPY_00001` - Hindi Female Happy Vibes
-- `PAN_F_HAPPY_00001` - Punjabi Female Happy Vibes
-
-## Usage Examples
-
-### Python Client
-
-```python
-import requests
-import base64
-
-# Single TTS request
-response = requests.post("http://localhost:8000/api/tts", json={
-    "text": "హలో, ఇది తెలుగు వాక్యం.",
-    "prompt_key": "TEL_F_WIKI_00001",
-    "output_format": "wav",
-    "sample_rate": 24000,
-    "normalize": true
-})
-
-if response.status_code == 200:
-    data = response.json()
-    
-    # Save audio from base64
-    audio_bytes = base64.b64decode(data['audio_base64'])
-    with open(data['filename'], 'wb') as f:
-        f.write(audio_bytes)
-    
-    print(f"Audio saved: {data['filename']}")
-```
-
-### cURL
-
-```bash
-# Single TTS request
-curl -X POST "http://localhost:8000/api/tts" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "text": "హలో, ఇది తెలుగు వాక్యం.",
-       "prompt_key": "TEL_F_WIKI_00001",
-       "output_format": "wav",
-       "sample_rate": 24000,
-       "normalize": true
-     }'
-
-# Get available prompts
-curl -X GET "http://localhost:8000/api/prompts"
-
-# Health check
-curl -X GET "http://localhost:8000/api/health"
-```
-
-### JavaScript/Node.js
-
-```javascript
-const axios = require('axios');
-const fs = require('fs');
-
-async function generateTTS() {
-  try {
-    const response = await axios.post('http://localhost:8000/api/tts', {
-      text: 'హలో, ఇది తెలుగు వాక్యం.',
-      prompt_key: 'TEL_F_WIKI_00001',
-      output_format: 'wav',
-      sample_rate: 24000,
-      normalize: true
-    });
-
-    if (response.data.success) {
-      // Save audio from base64
-      const audioBuffer = Buffer.from(response.data.audio_base64, 'base64');
-      fs.writeFileSync(response.data.filename, audioBuffer);
-      console.log(`Audio saved: ${response.data.filename}`);
+**Response:**
+```json
+{
+  "files": [
+    {
+      "filename": "tts_hin_f_happy_20231201_143052.wav",
+      "filepath": "/path/to/output/tts_hin_f_happy_20231201_143052.wav",
+      "size": 98304,
+      "created_time": "2023-12-01T14:30:52",
+      "format": "wav"
     }
-  } catch (error) {
-    console.error('Error:', error.response?.data || error.message);
-  }
+  ],
+  "total_count": 15,
+  "total_size": 2457600
 }
-
-generateTTS();
 ```
+
+### `GET /api/files/{filename}`
+Download a specific generated audio file from the server.
+
+**Response:** Binary audio file with appropriate Content-Type header.
+
+### `DELETE /api/files/{filename}`
+Delete a specific generated audio file from the server.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "File tts_hin_f_happy_20231201_143052.wav deleted successfully"
+}
+```
+
+### `DELETE /api/files`
+Delete all generated audio files from the server.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Deleted 15 files successfully",
+  "deleted_count": 15
+}
+```
+
+### Prompt Management Endpoints
+
+### `GET /api/prompts`
+List all available voice prompts.
+
+### `GET /api/prompts/{prompt_key}/audio`
+Download the audio file for a specific prompt.
+
+### `POST /api/prompts/upload`
+Upload a new voice prompt to the server.
+
+**Request:** Multipart form data with:
+- `file`: Audio file (wav, mp3, flac)
+- `name`: Display name for the prompt
+- `author`: Author/source of the prompt
+- `content`: Optional text content for the prompt
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Prompt 'my_voice' uploaded successfully",
+  "prompt_key": "my_voice"
+}
+```
+
+### `DELETE /api/prompts/{prompt_key}`
+Delete a voice prompt from the server.
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Prompt 'my_voice' deleted successfully"  
+}
+```
+
+### Other Endpoints
+
+### `GET /api/health`
+Check API health and model status.
+
+### `GET /api/`
+Get API information and available endpoints.
+
+### `GET /web`
+Access the web interface for the TTS system.
+
+## File Storage
+
+- **Generated Audio Files**: Automatically saved to `PATHS["output_dir"]` (default: `./data/out/`)
+- **Voice Prompts**: Stored in `PATHS["prompts_dir"]` (default: `./data/prompts/`)  
+- **File Formats**: WAV, MP3, FLAC supported
+- **Naming Convention**: `tts_{prompt_key}_{timestamp}.{format}`
+
+## Web Interface CRUD Operations
+
+The web interface (`/web`) now provides full CRUD operations that call the server APIs:
+
+- **Create**: Generate new TTS audio files via single or batch processing
+- **Read**: Browse and play generated files from the server
+- **Update**: Upload new voice prompts to expand available voices
+- **Delete**: Remove individual files or clear all generated files
+
+All operations in the web interface interact with the server's file system rather than browser storage.
 
 ## Testing
 
