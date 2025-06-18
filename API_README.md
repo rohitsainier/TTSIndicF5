@@ -10,7 +10,7 @@ A comprehensive REST API for Text-to-Speech using the IndicF5 model, supporting 
 - **Base64 Audio Response**: Get audio data directly in API response
 - **Server-side File Saving**: Save generated audio files on the server
 - **File Metadata Management**: Full CRUD operations for generated file metadata
-- **Prompt Management**: List and manage available voice prompts
+- **Prompt Management**: List and manage available reference prompts
 - **Health Check**: Monitor API status and model loading
 - **CORS Support**: Ready for web application integration
 
@@ -162,13 +162,13 @@ Delete all generated audio files from the server.
 ### Prompt Management Endpoints
 
 ### `GET /api/prompts`
-List all available voice prompts.
+List all available reference prompts.
 
 ### `GET /api/prompts/{prompt_key}/audio`
 Download the audio file for a specific prompt.
 
 ### `POST /api/prompts/upload`
-Upload a new voice prompt to the server.
+Upload a new reference prompt to the server.
 
 **Request:** Multipart form data with:
 - `file`: Audio file (wav, mp3, flac)
@@ -186,7 +186,7 @@ Upload a new voice prompt to the server.
 ```
 
 ### `DELETE /api/prompts/{prompt_key}`
-Delete a voice prompt from the server.
+Delete a reference prompt from the server.
 
 **Response:**
 ```json
@@ -346,7 +346,7 @@ Access the web interface for the TTS system.
 ## File Storage
 
 - **Generated Audio Files**: Automatically saved to `PATHS["output_dir"]` (default: `./data/out/`)
-- **Voice Prompts**: Stored in `PATHS["prompts_dir"]` (default: `./data/prompts/`)  
+- **Reference Prompts**: Stored in `PATHS["prompts_dir"]` (default: `./data/prompts/`)  
 - **File Formats**: WAV, MP3, FLAC supported
 - **Naming Convention**: `tts_{prompt_key}_{timestamp}.{format}`
 
@@ -370,7 +370,7 @@ Generated file metadata is automatically stored in `./data/out/files_metadata.js
 
 The metadata includes:
 - **filename**: Name of the generated audio file
-- **prompt_key**: Which voice prompt was used for generation
+- **prompt_key**: Which reference prompt was used for generation
 - **text_input**: Original text that was converted to speech
 - **created_datetime**: ISO format timestamp of when file was created
 - **size_bytes**: File size in bytes
@@ -383,7 +383,7 @@ The enhanced web interface (`/web`) now provides comprehensive file metadata man
 
 ### 🎯 **Enhanced File Display**
 - **Original Text Preview**: See the text that was used to generate each file
-- **Voice Prompt Information**: View which prompt was used for generation
+- **Reference Prompt Information**: View which prompt was used for generation
 - **Metadata Status Indicators**: Visual indicators for files with/without metadata
 - **Interactive File Cards**: Rich file information with embedded audio players
 
