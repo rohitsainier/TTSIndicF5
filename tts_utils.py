@@ -478,6 +478,239 @@ class TTSProcessor:
         logger.info(f"Batch processing completed: {successful_count} successful, {failed_count} failed, total time: {total_duration:.2f}s")
         
         return results
+    
+    def parse_prompt_tags(self, text: str, base_prompt_key: str = None) -> List[Dict[str, str]]:
+        """
+        Parse text containing <prompt key="prompt_key">text to speak</prompt> tags
+        
+        Args:
+            text: Input text containing prompt tags
+            base_prompt_key: Default prompt key for text outside of prompt tags
+            
+        Returns:
+            List of dictionaries with 'prompt_key' and 'text' keys
+        """
+        # If no base_prompt_key is provided, only extract tagged content
+        if base_prompt_key is None:
+            # Regular expression to match <prompt key="prompt_key">text</prompt> tags
+            pattern = r'<prompt\s+key\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</prompt>'
+            matches = re.findall(pattern, text, re.DOTALL)
+            
+            segments = []
+            for prompt_key, segment_text in matches:
+                segments.append({
+                    'prompt_key': prompt_key.strip(),
+                    'text': segment_text.strip()
+                })
+            
+            return segments
+        
+        # With base_prompt_key, we need to handle text outside tags too
+        segments = []
+        pattern = r'<prompt\s+key\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</prompt>'
+        
+        # Find all matches with their positions
+        matches = list(re.finditer(pattern, text, re.DOTALL))
+        
+        last_end = 0
+        for match in matches:
+            # Add any text before this tag using base_prompt_key
+            before_text = text[last_end:match.start()].strip()
+            if before_text:
+                segments.append({
+                    'prompt_key': base_prompt_key,
+                    'text': before_text
+                })
+            
+            # Add the tagged content
+            prompt_key = match.group(1).strip()
+            segment_text = match.group(2).strip()
+            if segment_text:
+                segments.append({
+                    'prompt_key': prompt_key,
+                    'text': segment_text
+                })
+            
+            last_end = match.end()
+        
+        # Add any remaining text after the last tag
+        after_text = text[last_end:].strip()
+        if after_text:
+            segments.append({
+                'prompt_key': base_prompt_key,
+                'text': after_text
+            })
+        
+        return segments
+    
+    def process_prompt_tagged_text(self, text: str, base_prompt_key: str = None, output_path: str = None, 
+                                 sample_rate: int = 24000, normalize: bool = True,
+                                 max_chunk_chars: int = 300, pause_duration: int = 200) -> Dict[str, Any]:
+        """
+        Process text containing multiple <prompt key="prompt_key">text</prompt> tags
+        and generate combined audio
+        
+        Args:
+            text: Input text with prompt tags
+            base_prompt_key: Default prompt key for text outside of prompt tags
+            output_path: Path to save the combined audio file (optional)
+            sample_rate: Sample rate for the output
+            normalize: Whether to normalize the audio
+            max_chunk_chars: Maximum characters per chunk for long texts
+            pause_duration: Duration of pause between segments in milliseconds
+            
+        Returns:
+            Dictionary with processing results including combined audio
+        """
+        try:
+            start_time = datetime.now()
+            
+            # Parse the prompt tags
+            segments = self.parse_prompt_tags(text, base_prompt_key)
+            
+            if not segments:
+                if base_prompt_key is None:
+                    raise ValueError("No valid <prompt key='key'>text</prompt> tags found in input text")
+                else:
+                    raise ValueError("No text content found to process")
+            
+            logger.info(f"Found {len(segments)} prompt segments to process")
+            
+            # Validate all prompt keys exist
+            for segment in segments:
+                if not self.validate_prompt_key(segment['prompt_key']):
+                    raise ValueError(f"Prompt key '{segment['prompt_key']}' not found. Available keys: {list(self.prompts.keys())}")
+            
+            # Generate audio for each segment
+            temp_audio_files = []
+            segment_results = []
+            
+            try:
+                for i, segment in enumerate(segments):
+                    logger.info(f"Processing segment {i+1}/{len(segments)} with prompt '{segment['prompt_key']}': {segment['text'][:50]}...")
+                    
+                    # Process this segment
+                    result = self.process_single_text(
+                        text=segment['text'],
+                        prompt_key=segment['prompt_key'],
+                        output_path=None,  # Don't save individual segments
+                        sample_rate=sample_rate,
+                        normalize=normalize,
+                        max_chunk_chars=max_chunk_chars
+                    )
+                    
+                    if not result['success']:
+                        raise Exception(f"Failed to process segment {i+1}: {result.get('error', 'Unknown error')}")
+                    
+                    # Save segment to temporary file
+                    temp_filename = f"temp_segment_{i}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
+                    temp_file_path = os.path.join(tempfile.gettempdir(), temp_filename)
+                    
+                    self.save_audio_file(result['audio_data'], temp_file_path, sample_rate)
+                    temp_audio_files.append(temp_file_path)
+                    
+                    # Store segment result
+                    segment_results.append({
+                        'segment_index': i,
+                        'prompt_key': segment['prompt_key'],
+                        'text': segment['text'],
+                        'success': True,
+                        'audio_duration': len(result['audio_data']) / sample_rate
+                    })
+                
+                # Combine all audio segments with pauses
+                if output_path:
+                    success = self.combine_audio_files_with_pauses(temp_audio_files, output_path, sample_rate, pause_duration)
+                    if not success:
+                        raise Exception("Failed to combine audio segments")
+                    
+                    # Load the combined audio
+                    final_audio, sr = sf.read(output_path)
+                else:
+                    # Create a temporary combined file
+                    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_combined:
+                        success = self.combine_audio_files_with_pauses(temp_audio_files, temp_combined.name, sample_rate, pause_duration)
+                        if not success:
+                            raise Exception("Failed to combine audio segments")
+                        
+                        # Load the combined audio
+                        final_audio, sr = sf.read(temp_combined.name)
+                        
+                        # Clean up the temporary combined file
+                        os.unlink(temp_combined.name)
+                
+                # Clean up temporary files
+                self.cleanup_temp_files(temp_audio_files)
+                
+            except Exception as e:
+                # Clean up temporary files in case of error
+                self.cleanup_temp_files(temp_audio_files)
+                raise e
+            
+            end_time = datetime.now()
+            duration = (end_time - start_time).total_seconds()
+            
+            return {
+                "success": True,
+                "audio_data": final_audio,
+                "sample_rate": sample_rate,
+                "duration": duration,
+                "segments_processed": len(segments),
+                "segment_results": segment_results,
+                "output_path": output_path,
+                "message": f"Successfully processed {len(segments)} segments and combined audio"
+            }
+            
+        except Exception as e:
+            logger.error(f"Prompt-tagged TTS generation failed: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": f"Prompt-tagged TTS generation failed: {str(e)}"
+            }
+    
+    def combine_audio_files_with_pauses(self, audio_files: List[str], output_path: str, 
+                                      sample_rate: int = 24000, pause_duration: int = 200) -> bool:
+        """
+        Combine multiple audio files into a single file with custom pause duration
+        
+        Args:
+            audio_files: List of paths to audio files to combine
+            output_path: Path where combined audio will be saved
+            sample_rate: Sample rate for the output
+            pause_duration: Duration of pause between segments in milliseconds
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            combined_audio = AudioSegment.empty()
+            
+            for i, audio_file in enumerate(audio_files):
+                if os.path.exists(audio_file):
+                    # Load audio file
+                    audio_segment = AudioSegment.from_wav(audio_file)
+                    
+                    # Set frame rate to ensure consistency
+                    audio_segment = audio_segment.set_frame_rate(sample_rate)
+                    
+                    # Add to combined audio
+                    combined_audio += audio_segment
+                    
+                    # Add pause between segments (except after the last one)
+                    if i < len(audio_files) - 1 and pause_duration > 0:
+                        silence = AudioSegment.silent(duration=pause_duration)
+                        combined_audio += silence
+            
+            # Export combined audio
+            combined_audio.export(output_path, format="wav")
+            
+            return True
+        except Exception as e:
+            logger.error(f"Error combining audio files with pauses: {str(e)}")
+            return False
+
+    # ...existing code...
 
 
 # Convenience functions for quick usage
@@ -541,3 +774,30 @@ def generate_speech_batch(texts: List[str], prompt_keys: List[str],
     """
     processor = create_tts_processor(model_repo_id=model_repo_id, auto_load=True)
     return processor.process_batch_texts(texts, prompt_keys, output_dir, sample_rate)
+
+
+def generate_speech_from_prompt_tags(text: str, base_prompt_key: str = None, output_path: str = None,
+                                   model_repo_id: str = None, sample_rate: int = 24000,
+                                   pause_duration: int = 200) -> Dict[str, Any]:
+    """
+    Simple function to generate speech from text containing prompt tags
+    
+    Args:
+        text: Input text with <prompt key="key">text</prompt> tags
+        base_prompt_key: Default prompt key for text outside of prompt tags
+        output_path: Path to save the combined audio file (optional)
+        model_repo_id: Hugging Face model repository ID
+        sample_rate: Sample rate for the output
+        pause_duration: Duration of pause between segments in milliseconds
+        
+    Returns:
+        Dictionary with processing results
+    """
+    processor = create_tts_processor(model_repo_id=model_repo_id, auto_load=True)
+    return processor.process_prompt_tagged_text(
+        text=text, 
+        base_prompt_key=base_prompt_key,
+        output_path=output_path, 
+        sample_rate=sample_rate,
+        pause_duration=pause_duration
+    )

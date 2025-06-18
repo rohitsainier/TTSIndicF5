@@ -63,6 +63,105 @@ if audio.dtype == np.int16:
 sf.write("samples/namaste.wav", np.array(audio, dtype=np.float32), samplerate=24000)
 ```
 
+## 🏷️ Prompt Tag Processing
+
+IndicF5 now supports processing text with multiple voice segments using prompt tags. This allows you to create combined audio with different voices and prompts in a single call.
+
+### Format
+Use the following XML-like format in your text:
+```xml
+<prompt key="prompt_key">text to speak with this prompt key</prompt>
+```
+
+### Example Usage
+
+```python
+from tts_utils import generate_speech_from_prompt_tags
+
+# Text with multiple voice segments
+text = '''
+<prompt key="TEL_F_WIKI_00001">ఇది తెలుగు లో మాట్లాడుతోంది.</prompt>
+
+<prompt key="HIN_F_HAPPY_00001">यह हिंदी में बोल रहा है।</prompt>
+
+<prompt key="PAN_F_HAPPY_00001">ਇਹ ਪੰਜਾਬੀ ਵਿੱਚ ਬੋਲ ਰਿਹਾ ਹੈ।</prompt>
+'''
+
+# Generate combined audio
+result = generate_speech_from_prompt_tags(
+    text=text,
+    output_path="multilingual_output.wav",
+    pause_duration=300  # 300ms pause between segments
+)
+
+if result['success']:
+    print(f"Generated audio with {result['segments_processed']} segments")
+    print(f"Saved to: {result['output_path']}")
+```
+
+### Base Prompt Key Feature
+
+You can now specify a `base_prompt_key` to handle text outside of prompt tags:
+
+```python
+# Text with mixed tagged and untagged content
+text = '''
+కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.
+
+<prompt key="TEL_M_WIKI_00001">अब मैं हिंदी में बोल रहा हूं।</prompt>
+
+తిరుమల వెంకటేశ్వర ఆలయం ప్రపంచంలో అత్యధికంగా సందర్శించే పుణ్యక్షేత్రాలలో ఒకటి.
+
+<prompt key="TEL_F_WIKI_00001">ఇప్పుడు తెలుగులో మాట్లాడుతున్నాను.</prompt>
+
+ఊరేగింపుకు ఒక ఎద్దు బండి కట్టేవారు. ఆ బండిని కడిగి, పసుపు రాసి, బొట్లు పెట్టి, పూలు కట్టి దాన్ని కూడా అందంగా అలంకరించేవారు.
+'''
+
+# Generate with base prompt for untagged text
+result = generate_speech_from_prompt_tags(
+    text=text,
+    base_prompt_key="PAN_F_HAPPY_00001",  # Voice for English parts
+    output_path="mixed_content_output.wav",
+    pause_duration=250
+)
+```
+
+### Advanced Usage
+
+```python
+from tts_utils import TTSProcessor
+
+# Create processor
+processor = TTSProcessor()
+processor.load_model()
+processor.load_prompts()
+
+# Process with custom settings
+result = processor.process_prompt_tagged_text(
+    text=text,
+    base_prompt_key="TEL_F_WIKI_00001",  # Base voice for untagged content
+    output_path="output.wav",
+    sample_rate=24000,
+    pause_duration=500,     # 500ms pause between segments
+    max_chunk_chars=200,    # Split long texts into chunks
+    normalize=True
+)
+```
+
+### Features
+- **Multi-voice support**: Use different prompt keys for different voice characteristics
+- **Base prompt key**: Specify a default voice for text outside of prompt tags
+- **Automatic audio combination**: Seamlessly combines segments with customizable pauses
+- **Text chunking**: Automatically handles long text segments
+- **Error handling**: Validates prompt keys and provides detailed error messages
+- **Batch processing**: Processes multiple segments efficiently
+
+### Available Test Scripts
+- `example_prompt_tags.py` - Basic example of prompt tag usage  
+- `example_enhanced_prompt_tags.py` - Advanced examples with base prompt key
+- `test_prompt_tags.py` - Comprehensive test suite with error handling
+- `test_base_prompt.py` - Test base prompt key functionality
+
 ## References
 
 We would like to extend our gratitude to the authors of  **[F5-TTS](https://github.com/SWivid/F5-TTS)** for their invaluable contributions and inspiration to this work. Their efforts have played a crucial role in advancing  the field of text-to-speech synthesis.
@@ -79,4 +178,5 @@ If you use **IndicF5** in your research or projects, please consider citing it:
   year         = {2025},
   url          = {https://github.com/AI4Bharat/IndicF5},
 }
+```
 

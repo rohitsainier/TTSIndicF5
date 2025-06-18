@@ -90,8 +90,8 @@ api_router = APIRouter(prefix="/api", tags=["TTS API"])
 
 # Pydantic models for request/response
 class TTSRequest(BaseModel):
-    text: str = Field(..., description="Text to convert to speech")
-    prompt_key: str = Field(..., description="Key for the reference audio prompt")
+    text: str = Field(..., description="Text to convert to speech. Supports prompt tags: <prompt key='key'>text</prompt>")
+    prompt_key: str = Field(..., description="Key for the reference audio prompt (used as default for text outside prompt tags)")
     output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
     sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
     normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
@@ -157,6 +157,25 @@ class FileMetadataListResponse(BaseModel):
     data: List[FileMetadata]
     total_count: int
     message: str
+
+class TTSPromptTaggedRequest(BaseModel):
+    text: str = Field(..., description="Text with <prompt key='key'>text</prompt> tags")
+    base_prompt_key: Optional[str] = Field(None, description="Default prompt key for text outside of prompt tags")
+    output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
+    sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
+    normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
+    max_chunk_chars: Optional[int] = Field(300, description="Maximum characters per chunk for long texts")
+    pause_duration: Optional[int] = Field(200, description="Duration of pause between segments in milliseconds")
+
+class TTSPromptTaggedResponse(BaseModel):
+    success: bool
+    audio_base64: Optional[str] = None
+    filename: Optional[str] = None
+    duration: Optional[float] = None
+    sample_rate: int
+    message: Optional[str] = None
+    segments_processed: Optional[int] = None
+    segment_results: Optional[List[Dict[str, Any]]] = None
 
 # Utility functions (keeping only API-specific ones)
 def audio_to_base64(audio_data: np.ndarray, sample_rate: int, format: str = "wav") -> str:
@@ -258,6 +277,73 @@ async def generate_audio_async(text: str, prompt_key: str) -> tuple[np.ndarray, 
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(executor, tts_processor.generate_audio, text, prompt_key)
 
+# New helper functions
+import re
+
+def has_prompt_tags(text: str) -> bool:
+    """Check if text contains prompt tags"""
+    pattern = r'<prompt\s+key\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</prompt>'
+    return bool(re.search(pattern, text, re.DOTALL))
+
+async def process_text_with_intelligent_routing(text: str, prompt_key: str, output_path: str, 
+                                               sample_rate: int = 24000, normalize: bool = True,
+                                               output_format: str = "wav") -> Dict[str, Any]:
+    """
+    Intelligently route text processing based on whether it contains prompt tags
+    """
+    # Check if text contains prompt tags
+    if has_prompt_tags(text):
+        logger.info("Text contains prompt tags, using prompt-tagged processing")
+        # Use prompt tagged processing
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(
+            executor, 
+            tts_processor.process_prompt_tagged_text,
+            text,
+            prompt_key,  # base_prompt_key for untagged text
+            output_path,
+            sample_rate,
+            normalize,
+            300,  # max_chunk_chars
+            200   # pause_duration
+        )
+        return result
+    else:
+        logger.info("Text does not contain prompt tags, using normal processing")
+        # Use normal processing logic
+        if len(text) > 300:
+            # Use chunked processing for long texts
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                executor,
+                tts_processor.process_single_text,
+                text,
+                prompt_key,
+                output_path,
+                sample_rate,
+                normalize,
+                300  # max_chunk_chars
+            )
+            return result
+        else:
+            # Use direct generation for short texts
+            audio, prompt_info = await generate_audio_async(text, prompt_key)
+            
+            # Normalize audio if requested
+            if normalize:
+                if audio.dtype == np.int16:
+                    audio = audio.astype(np.float32) / 32768.0
+            
+            # Save audio file to disk
+            tts_processor.save_audio_file(audio, output_path, sample_rate)
+            
+            return {
+                "success": True,
+                "audio_data": audio,
+                "prompt_info": prompt_info,
+                "message": "TTS generation successful"
+            }
+
 # API Routes
 @app.get("/")
 async def root():
@@ -301,6 +387,9 @@ async def api_root():
             "batch_tts": "/api/tts/batch",
             "prompts": "/api/prompts",
             "health": "/api/health"
+        },
+        "features": {
+            "prompt_tags": "The /api/tts endpoints automatically detect and process <prompt key='key'>text</prompt> tags"
         }
     }
 
@@ -353,7 +442,12 @@ async def get_prompt_audio(prompt_key: str):
 
 @api_router.post("/tts", response_model=TTSResponse)
 async def text_to_speech(request: TTSRequest):
-    """Convert single text to speech"""
+    """
+    Convert single text to speech with intelligent prompt tag detection.
+    
+    Automatically detects and processes <prompt key="key">text</prompt> tags in the input text.
+    If no prompt tags are found, uses the provided prompt_key for the entire text.
+    """
     try:
         start_time = datetime.now()
         
@@ -367,55 +461,28 @@ async def text_to_speech(request: TTSRequest):
         # Ensure output directory exists
         os.makedirs(PATHS["output_dir"], exist_ok=True)
         
-        # Check if text needs to be chunked (more than 300 characters)
-        if len(request.text) > 300:
-            logger.info(f"Text length {len(request.text)} > 300 chars, using TTS processor for chunked processing")
-            
-            # Generate filename and path
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"tts_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
-            file_path = os.path.join(PATHS["output_dir"], filename)
-            
-            # Use TTS processor for chunked processing
-            result = tts_processor.process_single_text(
-                text=request.text,
-                prompt_key=request.prompt_key,
-                output_path=file_path,
-                sample_rate=request.sample_rate,
-                normalize=request.normalize,
-                max_chunk_chars=300
-            )
-            
-            if not result["success"]:
-                raise Exception(result["message"])
-            
-            # Load the generated audio for base64 conversion
-            audio_data = result["audio_data"]
-            audio_base64 = audio_to_base64(audio_data, request.sample_rate, request.output_format)
-            prompt_info = result["prompt_info"]
+        # Generate filename and path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
+        file_path = os.path.join(PATHS["output_dir"], filename)
         
-        else:
-            # Process single text (original logic)
-            logger.info(f"Text length {len(request.text)} <= 300 chars, processing as single chunk")
-            
-            # Generate audio
-            audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
-            
-            # Normalize audio if requested
-            if request.normalize:
-                if audio.dtype == np.int16:
-                    audio = audio.astype(np.float32) / 32768.0
-            
-            # Generate filename and save to disk
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
-            file_path = os.path.join(PATHS["output_dir"], filename)
-            
-            # Save audio file to disk
-            tts_processor.save_audio_file(audio, file_path, request.sample_rate)
-            
-            # Convert to base64 for response
-            audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
+        # Use intelligent routing based on prompt tags
+        result = await process_text_with_intelligent_routing(
+            text=request.text,
+            prompt_key=request.prompt_key,
+            output_path=file_path,
+            sample_rate=request.sample_rate,
+            normalize=request.normalize,
+            output_format=request.output_format
+        )
+        
+        if not result["success"]:
+            raise Exception(result["message"])
+        
+        # Load the generated audio for base64 conversion
+        audio_data = result["audio_data"]
+        audio_base64 = audio_to_base64(audio_data, request.sample_rate, request.output_format)
+        prompt_info = result["prompt_info"]
         
         # Add file metadata
         add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
@@ -441,6 +508,12 @@ async def text_to_speech(request: TTSRequest):
 
 @api_router.post("/tts/batch", response_model=TTSBatchResponse)
 async def batch_text_to_speech(batch_request: TTSBatchRequest):
+    """
+    Convert multiple texts to speech with intelligent prompt tag detection.
+    
+    Each request automatically detects and processes <prompt key="key">text</prompt> tags.
+    If no prompt tags are found in a request, uses the provided prompt_key for the entire text.
+    """
     """Convert multiple texts to speech"""
     try:
         start_time = datetime.now()
@@ -468,14 +541,14 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
                 filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
                 file_path = os.path.join(PATHS["output_dir"], filename)
                 
-                # Process the text using TTS processor
-                result = tts_processor.process_single_text(
+                # Use intelligent routing based on prompt tags
+                result = await process_text_with_intelligent_routing(
                     text=request.text,
                     prompt_key=request.prompt_key,
                     output_path=file_path,
                     sample_rate=request.sample_rate,
                     normalize=request.normalize,
-                    max_chunk_chars=300
+                    output_format=request.output_format
                 )
                 
                 if result["success"]:
@@ -526,6 +599,61 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
     except Exception as e:
         logger.error(f"Batch TTS processing failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Batch TTS processing failed: {str(e)}")
+
+@api_router.post("/tts/prompt-tagged", response_model=TTSPromptTaggedResponse)
+async def prompt_tagged_text_to_speech(request: TTSPromptTaggedRequest):
+    """Convert text with prompt tags to speech"""
+    try:
+        start_time = datetime.now()
+        
+        # Ensure output directory exists
+        os.makedirs(PATHS["output_dir"], exist_ok=True)
+        
+        # Generate filename and path
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"tts_prompt_tagged_{timestamp}.{request.output_format}"
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        
+        # Use TTS processor for prompt tagged processing
+        result = tts_processor.process_prompt_tagged_text(
+            text=request.text,
+            base_prompt_key=request.base_prompt_key,
+            output_path=file_path,
+            sample_rate=request.sample_rate,
+            normalize=request.normalize,
+            max_chunk_chars=request.max_chunk_chars,
+            pause_duration=request.pause_duration
+        )
+        
+        if not result["success"]:
+            raise Exception(result["message"])
+        
+        # Convert to base64 for response
+        audio_base64 = audio_to_base64(result["audio_data"], request.sample_rate, request.output_format)
+        
+        # Add file metadata (use the first prompt key or base prompt key for metadata)
+        prompt_key_for_metadata = request.base_prompt_key or "multi_prompt"
+        add_file_metadata(filename, prompt_key_for_metadata, request.text, request.output_format)
+        
+        end_time = datetime.now()
+        duration = (end_time - start_time).total_seconds()
+        
+        return TTSPromptTaggedResponse(
+            success=True,
+            audio_base64=audio_base64,
+            filename=filename,
+            duration=duration,
+            sample_rate=request.sample_rate,
+            segments_processed=result.get("segments_processed", 0),
+            segment_results=result.get("segment_results", []),
+            message="Prompt tagged TTS generation successful"
+        )
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Prompt tagged TTS generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Prompt tagged TTS generation failed: {str(e)}")
 
 # New file management endpoints
 class FileInfo(BaseModel):
