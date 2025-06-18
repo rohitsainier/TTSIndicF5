@@ -9,6 +9,7 @@ A comprehensive REST API for Text-to-Speech using the IndicF5 model, supporting 
 - **Multiple Output Formats**: Support for WAV and MP3 formats
 - **Base64 Audio Response**: Get audio data directly in API response
 - **Server-side File Saving**: Save generated audio files on the server
+- **File Metadata Management**: Full CRUD operations for generated file metadata
 - **Prompt Management**: List and manage available voice prompts
 - **Health Check**: Monitor API status and model loading
 - **CORS Support**: Ready for web application integration
@@ -195,6 +196,142 @@ Delete a voice prompt from the server.
 }
 ```
 
+### File Metadata Management Endpoints
+
+### `GET /api/files/metadata`
+Get metadata for all generated files with information about file name, prompt used, text input, creation date, size, and format.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "filename": "tts_hin_f_happy_20231201_143052.wav",
+      "prompt_key": "hin_f_happy",
+      "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
+      "created_datetime": "2023-12-01T14:30:52.123456",
+      "size_bytes": 98304,
+      "format": "wav",
+      "file_path": "/path/to/output/tts_hin_f_happy_20231201_143052.wav"
+    }
+  ],
+  "total_count": 15,
+  "message": "File metadata retrieved successfully"
+}
+```
+
+### `GET /api/files/metadata/{filename}`
+Get metadata for a specific generated file.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "filename": "tts_hin_f_happy_20231201_143052.wav",
+    "prompt_key": "hin_f_happy",
+    "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
+    "created_datetime": "2023-12-01T14:30:52.123456",
+    "size_bytes": 98304,
+    "format": "wav",
+    "file_path": "/path/to/output/tts_hin_f_happy_20231201_143052.wav"
+  },
+  "message": "File metadata retrieved successfully"
+}
+```
+
+### `POST /api/files/metadata`
+Create metadata entry for an existing file (useful if file exists but metadata is missing).
+
+**Request:**
+```json
+{
+  "filename": "existing_file.wav",
+  "prompt_key": "hin_f_happy",
+  "text_input": "Original text used to generate this file",
+  "format": "wav"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "filename": "existing_file.wav",
+    "prompt_key": "hin_f_happy",
+    "text_input": "Original text used to generate this file",
+    "created_datetime": "2023-12-01T14:30:52.123456",
+    "size_bytes": 98304,
+    "format": "wav",
+    "file_path": "/path/to/output/existing_file.wav"
+  },
+  "message": "File metadata created successfully"
+}
+```
+
+### `PUT /api/files/metadata/{filename}`
+Update metadata for an existing file.
+
+**Request:**
+```json
+{
+  "prompt_key": "new_prompt_key",
+  "text_input": "Updated text description"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "filename": "tts_hin_f_happy_20231201_143052.wav",
+    "prompt_key": "new_prompt_key",
+    "text_input": "Updated text description",
+    "created_datetime": "2023-12-01T14:30:52.123456",
+    "size_bytes": 98304,
+    "format": "wav",
+    "file_path": "/path/to/output/tts_hin_f_happy_20231201_143052.wav"
+  },
+  "message": "File metadata updated successfully"
+}
+```
+
+### `DELETE /api/files/metadata/{filename}`
+Delete metadata for a specific file (file itself remains intact).
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "filename": "tts_hin_f_happy_20231201_143052.wav",
+    "prompt_key": "hin_f_happy",
+    "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
+    "created_datetime": "2023-12-01T14:30:52.123456",
+    "size_bytes": 98304,
+    "format": "wav",
+    "file_path": "/path/to/output/tts_hin_f_happy_20231201_143052.wav"
+  },
+  "message": "File metadata deleted successfully"
+}
+```
+
+### `DELETE /api/files/metadata`
+Delete all file metadata entries (files themselves remain intact).
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": [],
+  "total_count": 15,
+  "message": "All file metadata cleared successfully (15 entries removed)"
+}
+```
+
 ### Other Endpoints
 
 ### `GET /api/health`
@@ -213,16 +350,69 @@ Access the web interface for the TTS system.
 - **File Formats**: WAV, MP3, FLAC supported
 - **Naming Convention**: `tts_{prompt_key}_{timestamp}.{format}`
 
+## File Metadata Storage
+
+Generated file metadata is automatically stored in `./data/out/files_metadata.json` with the following structure:
+
+```json
+{
+  "tts_hin_f_happy_20231201_143052.wav": {
+    "filename": "tts_hin_f_happy_20231201_143052.wav",
+    "prompt_key": "hin_f_happy",
+    "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
+    "created_datetime": "2023-12-01T14:30:52.123456",
+    "size_bytes": 98304,
+    "format": "wav",
+    "file_path": "/path/to/output/tts_hin_f_happy_20231201_143052.wav"
+  }
+}
+```
+
+The metadata includes:
+- **filename**: Name of the generated audio file
+- **prompt_key**: Which voice prompt was used for generation
+- **text_input**: Original text that was converted to speech
+- **created_datetime**: ISO format timestamp of when file was created
+- **size_bytes**: File size in bytes
+- **format**: Audio format (wav, mp3, flac)
+- **file_path**: Full path to the audio file
+
 ## Web Interface CRUD Operations
 
-The web interface (`/web`) now provides full CRUD operations that call the server APIs:
+The enhanced web interface (`/web`) now provides comprehensive file metadata management with full CRUD operations:
 
-- **Create**: Generate new TTS audio files via single or batch processing
-- **Read**: Browse and play generated files from the server
-- **Update**: Upload new voice prompts to expand available voices
-- **Delete**: Remove individual files or clear all generated files
+### 🎯 **Enhanced File Display**
+- **Original Text Preview**: See the text that was used to generate each file
+- **Voice Prompt Information**: View which prompt was used for generation
+- **Metadata Status Indicators**: Visual indicators for files with/without metadata
+- **Interactive File Cards**: Rich file information with embedded audio players
 
-All operations in the web interface interact with the server's file system rather than browser storage.
+### 🔧 **Metadata Management**
+- **View Full Details**: Click "📋 Details" to see complete metadata information
+- **Edit Metadata**: Click "✏️" to modify prompt key or text input
+- **Add Missing Metadata**: Click "➕" to add metadata to files that don't have it
+- **Delete Confirmation**: Enhanced deletion with metadata cleanup
+
+### 📊 **Statistics & Analytics**
+- **Metadata Coverage**: Real-time statistics showing metadata completion percentage
+- **File Counts**: Track total files vs files with metadata
+- **Storage Information**: File size and storage usage tracking
+
+### 🛠️ **Bulk Operations**
+- **Metadata Management Section**: Collapsible tools panel with advanced features
+- **Export Metadata**: Download all metadata as JSON file
+- **Clear All Metadata**: Bulk deletion of metadata (files remain intact)
+- **Show Missing**: Quick view of files that need metadata
+- **Refresh All Data**: Update all statistics and file listings
+
+### 💡 **User Experience Enhancements**
+- **Modal Dialogs**: Professional forms for metadata editing
+- **Real-time Updates**: Automatic refresh after operations
+- **Error Handling**: Clear feedback for all operations
+- **Keyboard Shortcuts**: ESC key closes modals
+- **Responsive Design**: Works on desktop and mobile devices
+
+All operations in the web interface interact directly with the server's file system and metadata JSON file, ensuring data consistency and persistence.
 
 ## Testing
 
@@ -238,6 +428,35 @@ This will:
 3. Test single TTS generation
 4. Test batch TTS processing
 5. Test server-side file saving
+
+### File Metadata CRUD Testing
+
+Test the file metadata management features:
+
+```bash
+python test_file_metadata.py
+```
+
+This will test:
+1. Creating metadata entries for existing files
+2. Reading all file metadata
+3. Reading specific file metadata
+4. Updating metadata entries
+5. Deleting metadata entries
+
+### Web Interface Integration Testing
+
+Test the enhanced web interface with metadata features:
+
+```bash
+python test_web_integration.py
+```
+
+This will verify:
+1. API endpoint connectivity
+2. File and metadata endpoint integration
+3. Web interface functionality
+4. Metadata CRUD operations availability
 
 ## Configuration
 

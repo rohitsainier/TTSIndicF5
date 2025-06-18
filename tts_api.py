@@ -126,6 +126,37 @@ class PromptsResponse(BaseModel):
     prompts: Dict[str, PromptInfo]
     total_count: int
 
+# File metadata models for CRUD operations
+class FileMetadata(BaseModel):
+    filename: str
+    prompt_key: str
+    text_input: str
+    created_datetime: str
+    size_bytes: int
+    format: str
+    file_path: str
+
+class CreateFileMetadataRequest(BaseModel):
+    filename: str
+    prompt_key: str
+    text_input: str
+    format: str = "wav"
+
+class UpdateFileMetadataRequest(BaseModel):
+    prompt_key: Optional[str] = None
+    text_input: Optional[str] = None
+
+class FileMetadataResponse(BaseModel):
+    success: bool
+    data: Optional[FileMetadata] = None
+    message: str
+
+class FileMetadataListResponse(BaseModel):
+    success: bool
+    data: List[FileMetadata]
+    total_count: int
+    message: str
+
 # Utility functions
 def audio_to_base64(audio_data: np.ndarray, sample_rate: int, format: str = "wav") -> str:
     """Convert audio numpy array to base64 encoded string"""
@@ -146,6 +177,96 @@ def audio_to_base64(audio_data: np.ndarray, sample_rate: int, format: str = "wav
     audio_base64 = base64.b64encode(buffer.read()).decode('utf-8')
     return audio_base64
 
+# File metadata management functions
+def get_metadata_file_path() -> str:
+    """Get the path to the metadata JSON file"""
+    return os.path.join(PATHS["output_dir"], "files_metadata.json")
+
+def load_file_metadata() -> Dict[str, FileMetadata]:
+    """Load file metadata from JSON file"""
+    metadata_file = get_metadata_file_path()
+    if os.path.exists(metadata_file):
+        try:
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return {filename: FileMetadata(**metadata) for filename, metadata in data.items()}
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to load metadata file: {e}")
+            return {}
+    return {}
+
+def save_file_metadata(metadata_dict: Dict[str, FileMetadata]) -> bool:
+    """Save file metadata to JSON file"""
+    try:
+        metadata_file = get_metadata_file_path()
+        os.makedirs(os.path.dirname(metadata_file), exist_ok=True)
+        
+        # Convert FileMetadata objects to dict for JSON serialization
+        data_to_save = {filename: metadata.dict() for filename, metadata in metadata_dict.items()}
+        
+        with open(metadata_file, "w", encoding="utf-8") as f:
+            json.dump(data_to_save, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        logger.error(f"Failed to save metadata file: {e}")
+        return False
+
+def create_file_metadata(filename: str, prompt_key: str, text_input: str, format: str = "wav") -> FileMetadata:
+    """Create metadata for a generated file"""
+    file_path = os.path.join(PATHS["output_dir"], filename)
+    size_bytes = os.path.getsize(file_path) if os.path.exists(file_path) else 0
+    
+    return FileMetadata(
+        filename=filename,
+        prompt_key=prompt_key,
+        text_input=text_input,
+        created_datetime=datetime.now().isoformat(),
+        size_bytes=size_bytes,
+        format=format,
+        file_path=file_path
+    )
+
+def add_file_metadata(filename: str, prompt_key: str, text_input: str, format: str = "wav") -> bool:
+    """Add metadata for a new file"""
+    try:
+        metadata_dict = load_file_metadata()
+        metadata = create_file_metadata(filename, prompt_key, text_input, format)
+        metadata_dict[filename] = metadata
+        return save_file_metadata(metadata_dict)
+    except Exception as e:
+        logger.error(f"Failed to add file metadata for {filename}: {e}")
+        return False
+
+def update_file_metadata(filename: str, updates: Dict[str, Any]) -> bool:
+    """Update metadata for an existing file"""
+    try:
+        metadata_dict = load_file_metadata()
+        if filename not in metadata_dict:
+            return False
+        
+        # Update the metadata
+        current_metadata = metadata_dict[filename]
+        for key, value in updates.items():
+            if hasattr(current_metadata, key) and value is not None:
+                setattr(current_metadata, key, value)
+        
+        return save_file_metadata(metadata_dict)
+    except Exception as e:
+        logger.error(f"Failed to update file metadata for {filename}: {e}")
+        return False
+
+def delete_file_metadata(filename: str) -> bool:
+    """Delete metadata for a file"""
+    try:
+        metadata_dict = load_file_metadata()
+        if filename in metadata_dict:
+            del metadata_dict[filename]
+            return save_file_metadata(metadata_dict)
+        return True  # File wasn't in metadata, so deletion is successful
+    except Exception as e:
+        logger.error(f"Failed to delete file metadata for {filename}: {e}")
+        return False
+
 def generate_audio(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
     """Generate audio using the model"""
     if prompt_key not in prompts:
@@ -153,10 +274,17 @@ def generate_audio(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, An
     
     prompt_info = prompts[prompt_key]
     
+    # Construct full path to reference audio file
+    ref_audio_path = os.path.join(PATHS["prompts_dir"], prompt_info["file"])
+    
+    # Check if the reference audio file exists
+    if not os.path.exists(ref_audio_path):
+        raise ValueError(f"Reference audio file {prompt_info['file']} not found.")
+    
     # Generate speech
     audio = model(
         text,
-        ref_audio_path=prompt_info["file"],
+        ref_audio_path=ref_audio_path,
         ref_text=prompt_info["content"],
     )
     
@@ -290,6 +418,9 @@ async def text_to_speech(request: TTSRequest):
         # Convert to base64 for response
         audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
         
+        # Add file metadata
+        add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
+        
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
         
@@ -340,6 +471,9 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
             
             # Convert to base64 for response
             audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
+            
+            # Add file metadata
+            add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
             
             results.append(TTSResponse(
                 success=True,
@@ -485,16 +619,26 @@ async def download_file(filename: str):
 async def delete_file(filename: str):
     """Delete a generated audio file"""
     try:
+        # Security check - prevent directory traversal attacks
+        if ".." in filename or "/" in filename or "\\" in filename:
+            raise HTTPException(status_code=403, detail="Invalid filename")
+        
         file_path = os.path.join(PATHS["output_dir"], filename)
         
-        # Security check - ensure the file is in the output directory
-        if not os.path.commonpath([file_path, PATHS["output_dir"]]) == PATHS["output_dir"]:
+        # Additional security check - ensure the resolved path is still within output directory
+        output_dir_real = os.path.realpath(PATHS["output_dir"])
+        file_path_real = os.path.realpath(file_path)
+        
+        if not file_path_real.startswith(output_dir_real):
             raise HTTPException(status_code=403, detail="Access denied")
         
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail="File not found")
         
         os.remove(file_path)
+        
+        # Delete metadata if exists
+        delete_file_metadata(filename)
         
         return {
             "success": True,
@@ -524,6 +668,7 @@ async def clear_all_files():
             file_path = os.path.join(output_dir, filename)
             if os.path.isfile(file_path) and filename.lower().endswith(('.wav', '.mp3', '.flac')):
                 os.remove(file_path)
+                delete_file_metadata(filename)  # Remove metadata
                 deleted_count += 1
         
         return {
@@ -612,6 +757,187 @@ async def delete_prompt(prompt_key: str):
     except Exception as e:
         logger.error(f"Failed to delete prompt {prompt_key}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete prompt: {str(e)}")
+
+# File Metadata CRUD Endpoints
+@api_router.get("/files/metadata", response_model=FileMetadataListResponse)
+async def get_all_file_metadata():
+    """Get metadata for all generated files"""
+    try:
+        metadata_dict = load_file_metadata()
+        metadata_list = list(metadata_dict.values())
+        
+        return FileMetadataListResponse(
+            success=True,
+            data=metadata_list,
+            total_count=len(metadata_list),
+            message="File metadata retrieved successfully"
+        )
+    except Exception as e:
+        logger.error(f"Failed to retrieve file metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve file metadata: {str(e)}")
+
+@api_router.get("/files/metadata/{filename}", response_model=FileMetadataResponse)
+async def get_file_metadata(filename: str):
+    """Get metadata for a specific file"""
+    try:
+        # Sanitize filename
+        filename = os.path.basename(filename)
+        
+        metadata_dict = load_file_metadata()
+        if filename not in metadata_dict:
+            raise HTTPException(status_code=404, detail=f"Metadata for file '{filename}' not found")
+        
+        return FileMetadataResponse(
+            success=True,
+            data=metadata_dict[filename],
+            message="File metadata retrieved successfully"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to retrieve metadata for {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve file metadata: {str(e)}")
+
+@api_router.post("/files/metadata", response_model=FileMetadataResponse)
+async def create_file_metadata_entry(request: CreateFileMetadataRequest):
+    """Create metadata entry for a file (if file exists but metadata doesn't)"""
+    try:
+        # Sanitize filename
+        filename = os.path.basename(request.filename)
+        
+        # Check if file exists
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail=f"File '{filename}' not found")
+        
+        # Check if metadata already exists
+        metadata_dict = load_file_metadata()
+        if filename in metadata_dict:
+            raise HTTPException(status_code=409, detail=f"Metadata for file '{filename}' already exists")
+        
+        # Validate prompt key
+        if request.prompt_key not in prompts:
+            raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
+        
+        # Create and save metadata
+        success = add_file_metadata(filename, request.prompt_key, request.text_input, request.format)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to create file metadata")
+        
+        # Return the created metadata
+        metadata_dict = load_file_metadata()
+        return FileMetadataResponse(
+            success=True,
+            data=metadata_dict[filename],
+            message="File metadata created successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create metadata for {request.filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create file metadata: {str(e)}")
+
+@api_router.put("/files/metadata/{filename}", response_model=FileMetadataResponse)
+async def update_file_metadata_entry(filename: str, request: UpdateFileMetadataRequest):
+    """Update metadata for a specific file"""
+    try:
+        # Sanitize filename
+        filename = os.path.basename(filename)
+        
+        # Check if metadata exists
+        metadata_dict = load_file_metadata()
+        if filename not in metadata_dict:
+            raise HTTPException(status_code=404, detail=f"Metadata for file '{filename}' not found")
+        
+        # Prepare updates
+        updates = {}
+        if request.prompt_key is not None:
+            # Validate prompt key
+            if request.prompt_key not in prompts:
+                raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
+            updates["prompt_key"] = request.prompt_key
+        
+        if request.text_input is not None:
+            updates["text_input"] = request.text_input
+        
+        if not updates:
+            raise HTTPException(status_code=400, detail="No valid fields provided for update")
+        
+        # Update metadata
+        success = update_file_metadata(filename, updates)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to update file metadata")
+        
+        # Return updated metadata
+        metadata_dict = load_file_metadata()
+        return FileMetadataResponse(
+            success=True,
+            data=metadata_dict[filename],
+            message="File metadata updated successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update metadata for {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update file metadata: {str(e)}")
+
+@api_router.delete("/files/metadata/{filename}", response_model=FileMetadataResponse)
+async def delete_file_metadata_entry(filename: str):
+    """Delete metadata for a specific file"""
+    try:
+        # Sanitize filename
+        filename = os.path.basename(filename)
+        
+        # Check if metadata exists
+        metadata_dict = load_file_metadata()
+        if filename not in metadata_dict:
+            raise HTTPException(status_code=404, detail=f"Metadata for file '{filename}' not found")
+        
+        # Store the metadata before deletion for response
+        deleted_metadata = metadata_dict[filename]
+        
+        # Delete metadata
+        success = delete_file_metadata(filename)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to delete file metadata")
+        
+        return FileMetadataResponse(
+            success=True,
+            data=deleted_metadata,
+            message="File metadata deleted successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete metadata for {filename}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete file metadata: {str(e)}")
+
+@api_router.delete("/files/metadata", response_model=FileMetadataListResponse)
+async def clear_all_file_metadata():
+    """Delete all file metadata"""
+    try:
+        metadata_dict = load_file_metadata()
+        deleted_metadata = list(metadata_dict.values())
+        deleted_count = len(deleted_metadata)
+        
+        # Clear all metadata
+        success = save_file_metadata({})
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to clear file metadata")
+        
+        return FileMetadataListResponse(
+            success=True,
+            data=deleted_metadata,
+            total_count=deleted_count,
+            message=f"All file metadata cleared successfully ({deleted_count} entries removed)"
+        )
+        
+    except Exception as e:
+        logger.error(f"Failed to clear all file metadata: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to clear file metadata: {str(e)}")
 
 # Include API router first (before static mounts) to ensure API routes take precedence
 app.include_router(api_router)

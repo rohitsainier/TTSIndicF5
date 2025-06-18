@@ -278,6 +278,95 @@
             </div>
           </div>
         </div>
+
+        <!-- Metadata Statistics -->
+        <div class="mt-4 pt-4 border-t border-chalk-700">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-chalk-300">📋 Metadata Status</h3>
+            <button onclick="refreshMetadataStats()" class="text-chalk-400 hover:text-chalk-300 text-xs"
+              title="Refresh metadata statistics">
+              🔄
+            </button>
+          </div>
+          <div class="text-xs text-chalk-400">
+            <div class="flex justify-between">
+              <span>Files with metadata:</span>
+              <span id="filesWithMetadata">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Missing metadata:</span>
+              <span id="filesMissingMetadata">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Management Section -->
+    <div class="mt-8 bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-chalk-100">🏷️ Metadata Management</h2>
+        <button onclick="toggleMetadataSection()" id="metadataToggle"
+          class="text-chalk-400 hover:text-chalk-300 text-sm">
+          ▼ Show Tools
+        </button>
+      </div>
+
+      <div id="metadataTools" class="hidden space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Metadata Actions -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">🔧 Bulk Actions</h3>
+            <div class="space-y-2">
+              <button onclick="exportMetadata()"
+                class="w-full bg-chalk-700 hover:bg-chalk-600 text-chalk-100 py-2 px-3 rounded text-sm">
+                📤 Export Metadata (JSON)
+              </button>
+              <button onclick="clearAllMetadata()"
+                class="w-full bg-red-600 hover:bg-red-500 text-white py-2 px-3 rounded text-sm">
+                🗑️ Clear All Metadata
+              </button>
+            </div>
+          </div>
+
+          <!-- Metadata Statistics -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">📊 Statistics</h3>
+            <div class="text-xs text-chalk-400 space-y-1">
+              <div class="flex justify-between">
+                <span>Total Files:</span>
+                <span id="metadataStatsTotal">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span>With Metadata:</span>
+                <span id="metadataStatsWithMeta">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Missing Metadata:</span>
+                <span id="metadataStatsMissing">0</span>
+              </div>
+              <div class="flex justify-between border-t border-chalk-700 pt-1">
+                <span>Coverage:</span>
+                <span id="metadataCoverage">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">⚡ Quick Actions</h3>
+            <div class="space-y-2">
+              <button onclick="showFilesWithoutMetadata()"
+                class="w-full bg-yellow-600 hover:bg-yellow-500 text-white py-2 px-3 rounded text-sm">
+                📋 Show Files Missing Metadata
+              </button>
+              <button onclick="refreshAllData()"
+                class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-3 rounded text-sm">
+                🔄 Refresh All Data
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </main>
@@ -696,29 +785,73 @@
       const historyDiv = document.getElementById( 'historyList' );
 
       try {
-        const response = await fetch( `${API_BASE}/files` );
-        const data = await response.json();
+        // Get both files and metadata information
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
 
-        if ( response.ok && data.files.length > 0 ) {
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && filesData.files.length > 0 ) {
+          // Create a map of metadata by filename for easy lookup
+          const metadataMap = {};
+          if ( metadataResponse.ok && metadataData.data ) {
+            metadataData.data.forEach( metadata => {
+              metadataMap[ metadata.filename ] = metadata;
+            } );
+          }
+
           let historyHtml = '';
-          data.files.forEach( file => {
+          filesData.files.forEach( file => {
             const fileDate = new Date( file.created_time ).toLocaleString();
             const fileSizeKB = Math.round( file.size / 1024 );
+            const metadata = metadataMap[ file.filename ];
+
+            // Prepare display text for the original input
+            let textPreview = '';
+            let promptInfo = '';
+
+            if ( metadata ) {
+              promptInfo = `<div><strong>Voice Prompt:</strong> ${metadata.prompt_key}</div>`;
+
+              // Truncate long text with ellipsis
+              if ( metadata.text_input && metadata.text_input.length > 0 ) {
+                const maxLength = 100;
+                textPreview = metadata.text_input.length > maxLength
+                  ? metadata.text_input.substring( 0, maxLength ) + '...'
+                  : metadata.text_input;
+                textPreview = `<div class="mt-2 p-2 bg-chalkboard-950 rounded border border-chalk-800">
+                  <div class="text-chalk-400 text-xs mb-1"><strong>Original Text:</strong></div>
+                  <div class="text-chalk-300 text-xs break-words" title="${metadata.text_input.replace( /"/g, '&quot;' )}">${textPreview}</div>
+                </div>`;
+              }
+            }
 
             historyHtml += `
               <div class="file-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
                 <div class="flex items-center justify-between mb-2">
                   <h4 class="font-semibold text-chalk-100 text-sm">${file.filename}</h4>
-                  <button onclick="deleteFileFromServer('${file.filename}')" class="text-red-400 hover:text-red-300 text-sm">
-                    🗑️
-                  </button>
+                  <div class="flex gap-2">
+                    ${metadata ? `<button onclick="editFileMetadata('${file.filename}')" class="text-chalk-400 hover:text-chalk-300 text-sm" title="Edit metadata">
+                      ✏️
+                    </button>` : `<button onclick="createFileMetadata('${file.filename}')" class="text-yellow-400 hover:text-yellow-300 text-sm" title="Add metadata">
+                      ➕
+                    </button>`}
+                    <button onclick="deleteFileFromServer('${file.filename}')" class="text-red-400 hover:text-red-300 text-sm" title="Delete file">
+                      🗑️
+                    </button>
+                  </div>
                 </div>
                 <div class="text-chalk-300 text-xs space-y-1 mb-3">
                   <div><strong>Format:</strong> ${file.format.toUpperCase()}</div>
                   <div><strong>Size:</strong> ${fileSizeKB}KB</div>
                   <div><strong>Created:</strong> ${fileDate}</div>
+                  ${promptInfo}
                 </div>
-                <audio controls class="w-full h-8 mb-3" style="filter: hue-rotate(90deg);">
+                ${textPreview}
+                <audio controls class="w-full h-8 mb-3 mt-3" style="filter: hue-rotate(90deg);">
                   <source src="${API_BASE}/files/${file.filename}" type="audio/${file.format}">
                   Your browser does not support the audio element.
                 </audio>
@@ -727,6 +860,10 @@
                     class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-3 py-1 rounded text-xs">
                     📥 Download
                   </button>
+                  ${metadata ? `<button onclick="viewFullMetadata('${file.filename}')" 
+                    class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded text-xs">
+                    📋 Details
+                  </button>` : ''}
                 </div>
               </div>
             `;
@@ -736,7 +873,15 @@
           historyDiv.innerHTML = '<div class="text-center py-8 text-chalk-400">No generated files yet. Create some audio to see them here!</div>';
         }
 
-        updateStorageInfo( data.total_count, data.total_size );
+        updateStorageInfo( filesData.total_count, filesData.total_size );
+
+        // Update metadata statistics
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files.length;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          updateMetadataStats( filesWithMetadata, filesMissingMetadata );
+        }
 
       } catch ( error ) {
         console.error( 'Failed to load generated files:', error );
@@ -807,6 +952,217 @@
       document.getElementById( 'totalFiles' ).textContent = totalFiles;
       document.getElementById( 'storageUsed' ).textContent = ( totalSize / 1024 / 1024 ).toFixed( 2 ) + ' MB';
     }
+
+    function updateMetadataStats( filesWithMetadata = 0, filesMissingMetadata = 0 ) {
+      document.getElementById( 'filesWithMetadata' ).textContent = filesWithMetadata;
+      document.getElementById( 'filesMissingMetadata' ).textContent = filesMissingMetadata;
+    }
+
+    async function refreshMetadataStats() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files ? filesData.files.length : 0;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          updateMetadataStats( filesWithMetadata, filesMissingMetadata );
+        }
+      } catch ( error ) {
+        console.error( 'Failed to refresh metadata stats:', error );
+      }
+    }
+
+    // Close modals when ESC key is pressed
+    document.addEventListener( 'keydown', function ( event ) {
+      if ( event.key === 'Escape' ) {
+        closeModal();
+        closeEditModal();
+        closeCreateModal();
+      }
+    } );
+
+    // Metadata Management Functions
+    function toggleMetadataSection() {
+      const section = document.getElementById( 'metadataTools' );
+      const toggle = document.getElementById( 'metadataToggle' );
+
+      if ( section.classList.contains( 'hidden' ) ) {
+        section.classList.remove( 'hidden' );
+        toggle.textContent = '▲ Hide Tools';
+        updateMetadataToolsStats();
+      } else {
+        section.classList.add( 'hidden' );
+        toggle.textContent = '▼ Show Tools';
+      }
+    }
+
+    async function updateMetadataToolsStats() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files ? filesData.files.length : 0;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          const coverage = totalFiles > 0 ? Math.round( ( filesWithMetadata / totalFiles ) * 100 ) : 0;
+
+          document.getElementById( 'metadataStatsTotal' ).textContent = totalFiles;
+          document.getElementById( 'metadataStatsWithMeta' ).textContent = filesWithMetadata;
+          document.getElementById( 'metadataStatsMissing' ).textContent = filesMissingMetadata;
+          document.getElementById( 'metadataCoverage' ).textContent = coverage + '%';
+        }
+      } catch ( error ) {
+        console.error( 'Failed to update metadata tools stats:', error );
+      }
+    }
+
+    async function exportMetadata() {
+      try {
+        const response = await fetch( `${API_BASE}/files/metadata` );
+        const data = await response.json();
+
+        if ( response.ok && data.success ) {
+          const metadataJson = JSON.stringify( data.data, null, 2 );
+          const blob = new Blob( [ metadataJson ], { type: 'application/json' } );
+          const url = window.URL.createObjectURL( blob );
+          const a = document.createElement( 'a' );
+          a.href = url;
+          a.download = `files_metadata_export_${new Date().toISOString().split( 'T' )[ 0 ]}.json`;
+          document.body.appendChild( a );
+          a.click();
+          window.URL.revokeObjectURL( url );
+          document.body.removeChild( a );
+          alert( 'Metadata exported successfully!' );
+        } else {
+          alert( 'Failed to export metadata' );
+        }
+      } catch ( error ) {
+        alert( 'Error exporting metadata: ' + error.message );
+      }
+    }
+
+    async function clearAllMetadata() {
+      if ( !confirm( 'Are you sure you want to delete ALL file metadata? This action cannot be undone. The audio files will remain intact.' ) ) {
+        return;
+      }
+
+      try {
+        const response = await fetch( `${API_BASE}/files/metadata`, {
+          method: 'DELETE'
+        } );
+
+        const data = await response.json();
+        if ( response.ok && data.success ) {
+          alert( data.message );
+          loadGeneratedFiles();
+          updateMetadataToolsStats();
+        } else {
+          alert( 'Failed to clear metadata: ' + ( data.message || 'Unknown error' ) );
+        }
+      } catch ( error ) {
+        alert( 'Error clearing metadata: ' + error.message );
+      }
+    }
+
+    async function showFilesWithoutMetadata() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          // Create a set of filenames that have metadata
+          const metadataFilenames = new Set();
+          if ( metadataData.data ) {
+            metadataData.data.forEach( metadata => {
+              metadataFilenames.add( metadata.filename );
+            } );
+          }
+
+          // Find files without metadata
+          const filesWithoutMetadata = filesData.files.filter( file =>
+            !metadataFilenames.has( file.filename )
+          );
+
+          if ( filesWithoutMetadata.length === 0 ) {
+            alert( 'All files have metadata!' );
+            return;
+          }
+
+          // Create modal to show files without metadata
+          let filesList = '';
+          filesWithoutMetadata.forEach( file => {
+            filesList += `
+              <div class="flex items-center justify-between p-2 bg-chalkboard-800 rounded border border-chalk-700 mb-2">
+                <span class="text-chalk-100 text-sm">${file.filename}</span>
+                <button onclick="createFileMetadata('${file.filename}'); closeFilesWithoutMetadataModal();" 
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-2 py-1 rounded text-xs">
+                  ➕ Add Metadata
+                </button>
+              </div>
+            `;
+          } );
+
+          const modalHtml = `
+            <div id="filesWithoutMetadataModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="closeFilesWithoutMetadataModal()">
+              <div class="bg-chalkboard-800 border-2 border-chalk-600 rounded-lg p-6 max-w-2xl max-h-96 overflow-y-auto m-4" onclick="event.stopPropagation()">
+                <div class="flex justify-between items-center mb-4">
+                  <h3 class="text-xl font-bold text-chalk-100">📋 Files Missing Metadata (${filesWithoutMetadata.length})</h3>
+                  <button onclick="closeFilesWithoutMetadataModal()" class="text-chalk-400 hover:text-chalk-300 text-xl">✕</button>
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                  ${filesList}
+                </div>
+                <div class="mt-4 flex gap-2">
+                  <button onclick="closeFilesWithoutMetadataModal()" class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-4 py-2 rounded text-sm">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.insertAdjacentHTML( 'beforeend', modalHtml );
+        }
+      } catch ( error ) {
+        alert( 'Error loading files without metadata: ' + error.message );
+      }
+    }
+
+    function closeFilesWithoutMetadataModal() {
+      const modal = document.getElementById( 'filesWithoutMetadataModal' );
+      if ( modal ) {
+        modal.remove();
+      }
+    }
+
+    async function refreshAllData() {
+      try {
+        await loadGeneratedFiles();
+        await updateMetadataToolsStats();
+        alert( 'All data refreshed successfully!' );
+      } catch ( error ) {
+        alert( 'Error refreshing data: ' + error.message );
+      }
+    }
+
   </script>
 </body>
 
