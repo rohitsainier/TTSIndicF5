@@ -17,9 +17,9 @@ model = AutoModel.from_pretrained(repo_id, trust_remote_code=True)
 end_time = time()
 print(f"Model loaded in {end_time - start_time:.2f} seconds")
 
-# load prompts from prompts.json
+# load prompts from data/prompts/prompts.json
 
-with open("prompts/prompts.json", "r", encoding="utf-8") as f:
+with open("data/prompts/prompts.json", "r", encoding="utf-8") as f:
     prompts = json.load(f)
 
 prompt_key = "PAN_F_HAPPY_00001"
