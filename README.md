@@ -18,7 +18,7 @@ pip install git+https://github.com/ai4bharat/IndicF5.git
 ```
 - or
 ```sh
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 
 # pip install -e .
@@ -33,7 +33,14 @@ To generate speech, you need to provide **three inputs**:
 2. **A reference prompt audio** – An example speech clip that guides the model’s prosody and speaker characteristics.
 3. **Text spoken in the reference prompt audio** – The transcript of the reference prompt audio.
 
+- run `test.py` for quick test
+- update the `prompts.json` file path and `prompt_key` and `text_to_convert` to desired Indic Language
+- output will be generated in `data/out/*.wav` (Note: generate the folders if not available)
+```sh
+python test.py
+```
 
+- or create a new python script
 ```python
 from transformers import AutoModel
 import numpy as np
