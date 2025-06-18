@@ -38,6 +38,12 @@ fi
 # Create required directories
 mkdir -p data/out
 mkdir -p data/prompts
+# Copy prompts files if they exist
+if [ -d "prompts" ] && [ "$(ls -A prompts 2>/dev/null)" ]; then
+    echo "📁 Copying prompts files to data/prompts/..."
+    cp prompts/*.* data/prompts/ 2>/dev/null || true
+    echo "✅ Prompts files copied"
+fi
 
 # Check if prompts.json exists
 if [ ! -f "data/prompts/prompts.json" ]; then

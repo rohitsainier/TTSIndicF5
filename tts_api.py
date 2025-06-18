@@ -11,7 +11,6 @@ import io
 import base64
 import os
 from datetime import datetime
-from transformers import AutoModel
 import logging
 from contextlib import asynccontextmanager
 # System monitoring imports
@@ -22,10 +21,7 @@ import time
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from config import get_config, validate_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG, API_CONFIG, LOGGING_CONFIG
-import re
-from pydub import AudioSegment
-from pydub.utils import make_chunks
-import tempfile
+from tts_utils import TTSProcessor
 
 # Configure logging
 config = get_config()
@@ -36,9 +32,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Global variables for model and prompts
-model = None
-prompts = {}
+# Global TTS processor instance
+tts_processor = None
 
 # Thread pool executor for CPU-intensive tasks
 executor = ThreadPoolExecutor(max_workers=2)  # Limit to 2 workers to prevent overload
@@ -46,26 +41,17 @@ executor = ThreadPoolExecutor(max_workers=2)  # Limit to 2 workers to prevent ov
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    global model, prompts
-    logger.info("Loading IndicF5 model...")
+    global tts_processor
+    logger.info("Initializing TTS Processor...")
     
-    # Load IndicF5 from Hugging Face
-    repo_id = MODEL_CONFIG["repo_id"]
-    model = AutoModel.from_pretrained(
-        repo_id, 
-        trust_remote_code=MODEL_CONFIG["trust_remote_code"],
-        cache_dir=MODEL_CONFIG["cache_dir"]
-    )
-    logger.info(f"Model {repo_id} loaded successfully")
+    # Initialize TTS processor
+    tts_processor = TTSProcessor()
     
-    # Load prompts from prompts.json
-    try:
-        with open(PATHS["prompts_file"], "r", encoding="utf-8") as f:
-            prompts = json.load(f)
-        logger.info(f"Loaded {len(prompts)} prompts from {PATHS['prompts_file']}")
-    except FileNotFoundError:
-        logger.warning(f"Prompts file {PATHS['prompts_file']} not found, prompts will be empty")
-        prompts = {}
+    # Load model and prompts
+    tts_processor.load_model()
+    tts_processor.load_prompts()
+    
+    logger.info(f"TTS Processor initialized with {len(tts_processor.prompts)} prompts")
     
     # Validate configuration
     config_errors = validate_config()
@@ -172,25 +158,10 @@ class FileMetadataListResponse(BaseModel):
     total_count: int
     message: str
 
-# Utility functions
+# Utility functions (keeping only API-specific ones)
 def audio_to_base64(audio_data: np.ndarray, sample_rate: int, format: str = "wav") -> str:
     """Convert audio numpy array to base64 encoded string"""
-    buffer = io.BytesIO()
-    
-    # Ensure audio is in the right format
-    if audio_data.dtype != np.float32:
-        if audio_data.dtype == np.int16:
-            audio_data = audio_data.astype(np.float32) / 32768.0
-        else:
-            audio_data = audio_data.astype(np.float32)
-    
-    # Write audio to buffer
-    sf.write(buffer, audio_data, sample_rate, format=format.upper())
-    buffer.seek(0)
-    
-    # Encode to base64
-    audio_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    return audio_base64
+    return tts_processor.audio_to_base64(audio_data, sample_rate, format)
 
 # File metadata management functions
 def get_metadata_file_path() -> str:
@@ -282,33 +253,10 @@ def delete_file_metadata(filename: str) -> bool:
         logger.error(f"Failed to delete file metadata for {filename}: {e}")
         return False
 
-def generate_audio(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
-    """Generate audio using the model"""
-    if prompt_key not in prompts:
-        raise ValueError(f"Prompt key '{prompt_key}' not found")
-    
-    prompt_info = prompts[prompt_key]
-    
-    # Construct full path to reference audio file
-    ref_audio_path = os.path.join(PATHS["prompts_dir"], prompt_info["file"])
-    
-    # Check if the reference audio file exists
-    if not os.path.exists(ref_audio_path):
-        raise ValueError(f"Reference audio file {prompt_info['file']} not found.")
-    
-    # Generate speech
-    audio = model(
-        text,
-        ref_audio_path=ref_audio_path,
-        ref_text=prompt_info["content"],
-    )
-    
-    return audio, prompt_info
-
 async def generate_audio_async(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
-    """Async wrapper for generate_audio to run in thread pool"""
+    """Async wrapper for TTS processor to run in thread pool"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, generate_audio, text, prompt_key)
+    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, prompt_key)
 
 # API Routes
 @app.get("/")
@@ -361,33 +309,33 @@ async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "model_loaded": model is not None,
-        "prompts_loaded": len(prompts) > 0,
-        "available_prompts": len(prompts)
+        "model_loaded": tts_processor is not None and tts_processor.model is not None,
+        "prompts_loaded": tts_processor is not None and len(tts_processor.prompts) > 0,
+        "available_prompts": len(tts_processor.prompts) if tts_processor else 0
     }
 
 @api_router.get("/prompts", response_model=PromptsResponse)
 async def get_prompts():
     """Get all available prompts"""
     formatted_prompts = {}
-    for key, value in prompts.items():
+    for key, value in tts_processor.prompts.items():
         formatted_prompts[key] = PromptInfo(**value)
     
     return PromptsResponse(
         prompts=formatted_prompts,
-        total_count=len(prompts)
+        total_count=len(tts_processor.prompts)
     )
 
 @api_router.get("/prompts/{prompt_key}/audio")
 async def get_prompt_audio(prompt_key: str):
     """Get audio file for a specific prompt"""
-    if prompt_key not in prompts:
+    if prompt_key not in tts_processor.prompts:
         raise HTTPException(
             status_code=404, 
             detail=f"Prompt key '{prompt_key}' not found"
         )
     
-    prompt_info = prompts[prompt_key]
+    prompt_info = tts_processor.prompts[prompt_key]
     audio_file_path = f"{PATHS['prompts_dir']}/{prompt_info['file']}"
 
     # Check if file exists
@@ -410,10 +358,10 @@ async def text_to_speech(request: TTSRequest):
         start_time = datetime.now()
         
         # Validate prompt key
-        if request.prompt_key not in prompts:
+        if request.prompt_key not in tts_processor.prompts:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Prompt key '{request.prompt_key}' not found. Available keys: {list(prompts.keys())}"
+                detail=f"Prompt key '{request.prompt_key}' not found. Available keys: {list(tts_processor.prompts.keys())}"
             )
         
         # Ensure output directory exists
@@ -421,53 +369,30 @@ async def text_to_speech(request: TTSRequest):
         
         # Check if text needs to be chunked (more than 300 characters)
         if len(request.text) > 300:
-            logger.info(f"Text length {len(request.text)} > 300 chars, splitting into chunks")
+            logger.info(f"Text length {len(request.text)} > 300 chars, using TTS processor for chunked processing")
             
-            # Split text into chunks
-            text_chunks = split_text_into_chunks(request.text, max_chars=300)
-            logger.info(f"Split text into {len(text_chunks)} chunks")
+            # Generate filename and path
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"tts_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
+            file_path = os.path.join(PATHS["output_dir"], filename)
             
-            # Generate audio for each chunk
-            temp_audio_files = []
-            try:
-                for i, chunk in enumerate(text_chunks):
-                    logger.info(f"Processing chunk {i+1}/{len(text_chunks)}: {chunk[:50]}...")
-                    
-                    # Generate audio for this chunk
-                    chunk_audio, prompt_info = await generate_audio_async(chunk, request.prompt_key)
-                    
-                    # Normalize audio if requested
-                    if request.normalize:
-                        if chunk_audio.dtype == np.int16:
-                            chunk_audio = chunk_audio.astype(np.float32) / 32768.0
-                    
-                    # Save chunk to temporary file
-                    temp_filename = f"temp_chunk_{i}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
-                    temp_file_path = os.path.join(PATHS["output_dir"], temp_filename)
-                    sf.write(temp_file_path, np.array(chunk_audio, dtype=np.float32), samplerate=request.sample_rate)
-                    temp_audio_files.append(temp_file_path)
-                
-                # Generate final filename
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"tts_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
-                file_path = os.path.join(PATHS["output_dir"], filename)
-                
-                # Combine all audio chunks into single file
-                success = combine_audio_files(temp_audio_files, file_path, request.sample_rate)
-                if not success:
-                    raise Exception("Failed to combine audio chunks")
-                
-                # Load the combined audio for base64 conversion
-                combined_audio, sr = sf.read(file_path)
-                audio_base64 = audio_to_base64(combined_audio, request.sample_rate, request.output_format)
-                
-                # Clean up temporary files
-                cleanup_temp_files(temp_audio_files)
-                
-            except Exception as e:
-                # Clean up temporary files in case of error
-                cleanup_temp_files(temp_audio_files)
-                raise e
+            # Use TTS processor for chunked processing
+            result = tts_processor.process_single_text(
+                text=request.text,
+                prompt_key=request.prompt_key,
+                output_path=file_path,
+                sample_rate=request.sample_rate,
+                normalize=request.normalize,
+                max_chunk_chars=300
+            )
+            
+            if not result["success"]:
+                raise Exception(result["message"])
+            
+            # Load the generated audio for base64 conversion
+            audio_data = result["audio_data"]
+            audio_base64 = audio_to_base64(audio_data, request.sample_rate, request.output_format)
+            prompt_info = result["prompt_info"]
         
         else:
             # Process single text (original logic)
@@ -487,7 +412,7 @@ async def text_to_speech(request: TTSRequest):
             file_path = os.path.join(PATHS["output_dir"], filename)
             
             # Save audio file to disk
-            sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+            tts_processor.save_audio_file(audio, file_path, request.sample_rate)
             
             # Convert to base64 for response
             audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
@@ -517,122 +442,90 @@ async def text_to_speech(request: TTSRequest):
 @api_router.post("/tts/batch", response_model=TTSBatchResponse)
 async def batch_text_to_speech(batch_request: TTSBatchRequest):
     """Convert multiple texts to speech"""
-    results = []
-    successful_requests = 0
-    failed_requests = 0
-    start_time = datetime.now()
-    
-    # Ensure output directory exists
-    os.makedirs(PATHS["output_dir"], exist_ok=True)
-    
-    for i, request in enumerate(batch_request.requests):
-        try:
-            # Check if text needs to be chunked
-            if len(request.text) > 300:
-                logger.info(f"Batch request {i}: Text length {len(request.text)} > 300 chars, splitting into chunks")
+    try:
+        start_time = datetime.now()
+        
+        # Ensure output directory exists
+        os.makedirs(PATHS["output_dir"], exist_ok=True)
+        
+        # Prepare data for batch processing
+        texts = [req.text for req in batch_request.requests]
+        prompt_keys = [req.prompt_key for req in batch_request.requests]
+        
+        # Use TTS processor for batch processing
+        results = []
+        successful_requests = 0
+        failed_requests = 0
+        
+        for i, request in enumerate(batch_request.requests):
+            try:
+                # Validate prompt key
+                if not tts_processor.validate_prompt_key(request.prompt_key):
+                    raise ValueError(f"Prompt key '{request.prompt_key}' not found")
                 
-                # Split text into chunks
-                text_chunks = split_text_into_chunks(request.text, max_chars=300)
-                logger.info(f"Batch request {i}: Split text into {len(text_chunks)} chunks")
-                
-                # Generate audio for each chunk
-                temp_audio_files = []
-                try:
-                    for j, chunk in enumerate(text_chunks):
-                        logger.info(f"Batch request {i}: Processing chunk {j+1}/{len(text_chunks)}")
-                        
-                        # Generate audio for this chunk
-                        chunk_audio, prompt_info = await generate_audio_async(chunk, request.prompt_key)
-                        
-                        # Normalize audio if requested
-                        if request.normalize:
-                            if chunk_audio.dtype == np.int16:
-                                chunk_audio = chunk_audio.astype(np.float32) / 32768.0
-                        
-                        # Save chunk to temporary file
-                        temp_filename = f"temp_batch_{i}_chunk_{j}_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.wav"
-                        temp_file_path = os.path.join(PATHS["output_dir"], temp_filename)
-                        sf.write(temp_file_path, np.array(chunk_audio, dtype=np.float32), samplerate=request.sample_rate)
-                        temp_audio_files.append(temp_file_path)
-                    
-                    # Generate final filename
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}_combined.{request.output_format}"
-                    file_path = os.path.join(PATHS["output_dir"], filename)
-                    
-                    # Combine all audio chunks into single file
-                    success = combine_audio_files(temp_audio_files, file_path, request.sample_rate)
-                    if not success:
-                        raise Exception("Failed to combine audio chunks")
-                    
-                    # Load the combined audio for base64 conversion
-                    combined_audio, sr = sf.read(file_path)
-                    audio_base64 = audio_to_base64(combined_audio, request.sample_rate, request.output_format)
-                    
-                    # Clean up temporary files
-                    cleanup_temp_files(temp_audio_files)
-                    
-                except Exception as e:
-                    # Clean up temporary files in case of error
-                    cleanup_temp_files(temp_audio_files)
-                    raise e
-            
-            else:
-                # Process single text (original logic)
-                logger.info(f"Batch request {i}: Text length {len(request.text)} <= 300 chars, processing as single chunk")
-                
-                # Generate audio for this request
-                audio, prompt_info = await generate_audio_async(request.text, request.prompt_key)
-                
-                # Normalize audio if requested
-                if request.normalize:
-                    if audio.dtype == np.int16:
-                        audio = audio.astype(np.float32) / 32768.0
-                
-                # Generate filename and save to disk
+                # Generate filename and path
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
                 file_path = os.path.join(PATHS["output_dir"], filename)
                 
-                # Save audio file to disk
-                sf.write(file_path, np.array(audio, dtype=np.float32), samplerate=request.sample_rate)
+                # Process the text using TTS processor
+                result = tts_processor.process_single_text(
+                    text=request.text,
+                    prompt_key=request.prompt_key,
+                    output_path=file_path,
+                    sample_rate=request.sample_rate,
+                    normalize=request.normalize,
+                    max_chunk_chars=300
+                )
                 
-                # Convert to base64 for response
-                audio_base64 = audio_to_base64(audio, request.sample_rate, request.output_format)
-            
-            # Add file metadata
-            add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
-            
-            results.append(TTSResponse(
-                success=True,
-                audio_base64=audio_base64,
-                filename=filename,
-                sample_rate=request.sample_rate,
-                prompt_info=prompt_info,
-                message="TTS generation successful"
-            ))
-            successful_requests += 1
-            
-        except Exception as e:
-            logger.error(f"Batch TTS generation failed for request {i}: {str(e)}")
-            results.append(TTSResponse(
-                success=False,
-                sample_rate=request.sample_rate,
-                message=f"TTS generation failed: {str(e)}"
-            ))
-            failed_requests += 1
-    
-    end_time = datetime.now()
-    total_duration = (end_time - start_time).total_seconds()
-    
-    return TTSBatchResponse(
-        success=failed_requests == 0,
-        results=results,
-        total_requests=len(batch_request.requests),
-        successful_requests=successful_requests,
-        failed_requests=failed_requests,
-        total_duration=total_duration
-    )
+                if result["success"]:
+                    # Convert to base64 for response
+                    audio_base64 = audio_to_base64(result["audio_data"], request.sample_rate, request.output_format)
+                    
+                    # Add file metadata
+                    add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
+                    
+                    results.append(TTSResponse(
+                        success=True,
+                        audio_base64=audio_base64,
+                        filename=filename,
+                        sample_rate=request.sample_rate,
+                        prompt_info=result["prompt_info"],
+                        message="TTS generation successful"
+                    ))
+                    successful_requests += 1
+                else:
+                    results.append(TTSResponse(
+                        success=False,
+                        sample_rate=request.sample_rate,
+                        message=result["message"]
+                    ))
+                    failed_requests += 1
+                    
+            except Exception as e:
+                logger.error(f"Batch TTS generation failed for request {i}: {str(e)}")
+                results.append(TTSResponse(
+                    success=False,
+                    sample_rate=request.sample_rate,
+                    message=f"TTS generation failed: {str(e)}"
+                ))
+                failed_requests += 1
+        
+        end_time = datetime.now()
+        total_duration = (end_time - start_time).total_seconds()
+        
+        return TTSBatchResponse(
+            success=failed_requests == 0,
+            results=results,
+            total_requests=len(batch_request.requests),
+            successful_requests=successful_requests,
+            failed_requests=failed_requests,
+            total_duration=total_duration
+        )
+        
+    except Exception as e:
+        logger.error(f"Batch TTS processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Batch TTS processing failed: {str(e)}")
 
 # New file management endpoints
 class FileInfo(BaseModel):
@@ -834,7 +727,7 @@ async def upload_prompt(file: UploadFile = File(...), name: str = Form(...), aut
         
         # Update prompts.json
         prompt_key = safe_name.lower().replace(' ', '_')
-        prompts[prompt_key] = {
+        tts_processor.prompts[prompt_key] = {
             "author": author,
             "content": content or f"Sample content for {name}",
             "file": filename,
@@ -843,7 +736,7 @@ async def upload_prompt(file: UploadFile = File(...), name: str = Form(...), aut
         
         # Save updated prompts.json
         with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
-            json.dump(prompts, f, indent=2, ensure_ascii=False)
+            json.dump(tts_processor.prompts, f, indent=2, ensure_ascii=False)
         
         return {
             "success": True,
@@ -859,21 +752,21 @@ async def upload_prompt(file: UploadFile = File(...), name: str = Form(...), aut
 async def delete_prompt(prompt_key: str):
     """Delete a prompt"""
     try:
-        if prompt_key not in prompts:
+        if prompt_key not in tts_processor.prompts:
             raise HTTPException(status_code=404, detail=f"Prompt key '{prompt_key}' not found")
         
         # Remove audio file
-        prompt_info = prompts[prompt_key]
+        prompt_info = tts_processor.prompts[prompt_key]
         audio_file_path = os.path.join(PATHS["prompts_dir"], prompt_info["file"])
         if os.path.exists(audio_file_path):
             os.remove(audio_file_path)
         
         # Remove from prompts dict
-        del prompts[prompt_key]
+        del tts_processor.prompts[prompt_key]
         
         # Save updated prompts.json
         with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
-            json.dump(prompts, f, indent=2, ensure_ascii=False)
+            json.dump(tts_processor.prompts, f, indent=2, ensure_ascii=False)
         
         return {
             "success": True,
@@ -944,7 +837,7 @@ async def create_file_metadata_entry(request: CreateFileMetadataRequest):
             raise HTTPException(status_code=409, detail=f"Metadata for file '{filename}' already exists")
         
         # Validate prompt key
-        if request.prompt_key not in prompts:
+        if request.prompt_key not in tts_processor.prompts:
             raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
         
         # Create and save metadata
@@ -982,7 +875,7 @@ async def update_file_metadata_entry(filename: str, request: UpdateFileMetadataR
         updates = {}
         if request.prompt_key is not None:
             # Validate prompt key
-            if request.prompt_key not in prompts:
+            if request.prompt_key not in tts_processor.prompts:
                 raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
             updates["prompt_key"] = request.prompt_key
         
@@ -1133,113 +1026,12 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"Failed to start server: {e}")
 
-def split_text_into_chunks(text: str, max_chars: int = 300) -> List[str]:
-    """Split text into chunks of maximum character length, preserving sentence structure"""
-    if len(text) <= max_chars:
-        return [text]
-    
-    chunks = []
-    current_chunk = ""
-    
-    # Split by sentences first (using period, exclamation, question mark)
-    sentences = re.split(r'(?<=[.!?])\s+', text)
-    
-    for sentence in sentences:
-        # If a single sentence is longer than max_chars, split it further
-        if len(sentence) > max_chars:
-            # Split by commas or other punctuation
-            sub_parts = re.split(r'(?<=[,;:])\s+', sentence)
-            for part in sub_parts:
-                if len(part) > max_chars:
-                    # If still too long, split by words
-                    words = part.split()
-                    temp_chunk = ""
-                    for word in words:
-                        if len(temp_chunk + " " + word) <= max_chars:
-                            temp_chunk = temp_chunk + " " + word if temp_chunk else word
-                        else:
-                            if temp_chunk:
-                                chunks.append(temp_chunk.strip())
-                            temp_chunk = word
-                    if temp_chunk:
-                        if len(current_chunk + " " + temp_chunk) <= max_chars:
-                            current_chunk = current_chunk + " " + temp_chunk if current_chunk else temp_chunk
-                        else:
-                            if current_chunk:
-                                chunks.append(current_chunk.strip())
-                            current_chunk = temp_chunk
-                else:
-                    if len(current_chunk + " " + part) <= max_chars:
-                        current_chunk = current_chunk + " " + part if current_chunk else part
-                    else:
-                        if current_chunk:
-                            chunks.append(current_chunk.strip())
-                        current_chunk = part
-        else:
-            # Check if adding this sentence would exceed max_chars
-            if len(current_chunk + " " + sentence) <= max_chars:
-                current_chunk = current_chunk + " " + sentence if current_chunk else sentence
-            else:
-                if current_chunk:
-                    chunks.append(current_chunk.strip())
-                current_chunk = sentence
-    
-    # Add any remaining text
-    if current_chunk:
-        chunks.append(current_chunk.strip())
-    
-    # Filter out empty chunks
-    chunks = [chunk for chunk in chunks if chunk.strip()]
-    
-    return chunks
-
-def combine_audio_files(audio_files: List[str], output_path: str, sample_rate: int = 24000) -> bool:
-    """Combine multiple audio files into a single file"""
-    try:
-        combined_audio = AudioSegment.empty()
-        
-        for audio_file in audio_files:
-            if os.path.exists(audio_file):
-                # Load audio file
-                audio_segment = AudioSegment.from_wav(audio_file)
-                
-                # Set frame rate to ensure consistency
-                audio_segment = audio_segment.set_frame_rate(sample_rate)
-                
-                # Add to combined audio
-                combined_audio += audio_segment
-                
-                # Add a small pause between chunks (100ms)
-                silence = AudioSegment.silent(duration=100)
-                combined_audio += silence
-        
-        # Remove the last silence
-        if len(combined_audio) > 100:
-            combined_audio = combined_audio[:-100]
-        
-        # Export combined audio
-        combined_audio.export(output_path, format="wav")
-        
-        return True
-    except Exception as e:
-        logger.error(f"Error combining audio files: {str(e)}")
-        return False
-
-def cleanup_temp_files(file_paths: List[str]):
-    """Clean up temporary audio files"""
-    for file_path in file_paths:
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except Exception as e:
-            logger.warning(f"Failed to remove temporary file {file_path}: {str(e)}")
-
 # Add test endpoint for chunking demo
 @api_router.post("/tts/chunk-demo")
 async def chunk_demo(text: str):
     """Demo endpoint to show how text would be chunked"""
     try:
-        chunks = split_text_into_chunks(text, max_chars=300)
+        chunks = tts_processor.split_text_into_chunks(text, max_chars=300)
         
         return {
             "success": True,
