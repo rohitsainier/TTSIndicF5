@@ -1,31 +1,34 @@
-# **IndicF5: High-Quality TextTo gTo ge22. **A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
+# **IndicF5: High-Quality TextTo gTo ge22. **A reference voice audio\*\* – An example speech clip that guides the model's prosody and speaker characteristics.
+
 3. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.**A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
-3. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.rate speech, you need to provide **three inputs**:
-1. **Text to synthesize** – The content you want the model to speak.
-2. **A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
-3. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.**A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
-3. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.rate speech, you need to provide **three inputs**:
-1. **Text to synthesize** – The content you want the model to speak.
-2. **A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
-3. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.Speech for Indian Languages**
+4. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.rate speech, you need to provide **three inputs**:
+5. **Text to synthesize** – The content you want the model to speak.
+6. **A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
+7. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.**A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
+8. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.rate speech, you need to provide **three inputs**:
+9. **Text to synthesize** – The content you want the model to speak.
+10. **A reference voice audio** – An example speech clip that guides the model's prosody and speaker characteristics.
+11. **Text spoken in the reference voice audio** – The transcript of the reference voice audio.Speech for Indian Languages\*\*
 
 [![Hugging Face](https://img.shields.io/badge/HuggingFace-Model-orange)](https://huggingface.co/ai4bharat/IndicF5)
 
-
-We release **IndicF5**, a **near-human polyglot** **Text-to-Speech (TTS)** model trained on **1417 hours** of high-quality speech from **[Rasa](https://huggingface.co/datasets/ai4bharat/Rasa), [IndicTTS](https://www.iitm.ac.in/donlab/indictts/database), [LIMMITS](https://sites.google.com/view/limmits24/), and [IndicVoices-R](https://huggingface.co/datasets/ai4bharat/indicvoices_r)**.  
+We release **IndicF5**, a **near-human polyglot** **Text-to-Speech (TTS)** model trained on **1417 hours** of high-quality speech from **[Rasa](https://huggingface.co/datasets/ai4bharat/Rasa), [IndicTTS](https://www.iitm.ac.in/donlab/indictts/database), [LIMMITS](https://sites.google.com/view/limmits24/), and [IndicVoices-R](https://huggingface.co/datasets/ai4bharat/indicvoices_r)**.
 
 IndicF5 supports **11 Indian languages**:  
-**Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, Telugu.**  
+**Assamese, Bengali, Gujarati, Hindi, Kannada, Malayalam, Marathi, Odia, Punjabi, Tamil, Telugu.**
 
 ---
 
 ## 🚀 Installation
+
 ```bash
 conda create -n indicf5 python=3.12 -y
 conda activate indicf5
 pip install git+https://github.com/ai4bharat/IndicF5.git
 ```
+
 - or
+
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
@@ -34,22 +37,25 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-
 ## 🎙 Usage
 
 To generate speech, you need to provide **three inputs**:
+
 1. **Text to synthesize** – The content you want the model to speak.
 2. **A reference prompt audio** – An example speech clip that guides the model’s prosody and speaker characteristics.
 3. **Text spoken in the reference prompt audio** – The transcript of the reference prompt audio.
 
+- just run `./start_api.sh` or `HF_TOKEN=XXX ./start_api.sh` for login to HF for downloading Model
 - run `test.py` for quick test
 - update the `reference_voices.json` file path and `reference_voice_key` and `text_to_convert` to desired Indic Language
 - output will be generated in `data/out/*.wav` (Note: generate the folders if not available)
+
 ```sh
 python test.py
 ```
 
 - or create a new python script
+
 ```python
 from transformers import AutoModel
 import numpy as np
@@ -77,7 +83,9 @@ sf.write("samples/namaste.wav", np.array(audio, dtype=np.float32), samplerate=24
 IndicF5 now supports processing text with multiple voice segments using prompt tags. This allows you to create combined audio with different voices and referenceVoices in a single call.
 
 ### Format
+
 Use the following XML-like format in your text:
+
 ```xml
 <refvoice key="reference_voice_key">text to speak with this prompt key</refvoice>
 ```
@@ -158,6 +166,7 @@ result = processor.process_reference_voice_tagged_text(
 ```
 
 ### Features
+
 - **Multi-voice support**: Use different prompt keys for different voice characteristics
 - **Base prompt key**: Specify a default voice for text outside of prompt tags
 - **Automatic audio combination**: Seamlessly combines segments with customizable pauses
@@ -166,20 +175,22 @@ result = processor.process_reference_voice_tagged_text(
 - **Batch processing**: Processes multiple segments efficiently
 
 ### Available Test Scripts
-- `example_reference_voice_tags.py` - Basic example of prompt tag usage  
+
+- `example_reference_voice_tags.py` - Basic example of prompt tag usage
 - `example_enhanced_reference_voice_tags.py` - Advanced examples with base prompt key
 - `test_reference_voice_tags.py` - Comprehensive test suite with error handling
 - `test_base_prompt.py` - Test base prompt key functionality
 
 ## References
 
-We would like to extend our gratitude to the authors of  **[F5-TTS](https://github.com/SWivid/F5-TTS)** for their invaluable contributions and inspiration to this work. Their efforts have played a crucial role in advancing  the field of text-to-speech synthesis.
-
+We would like to extend our gratitude to the authors of **[F5-TTS](https://github.com/SWivid/F5-TTS)** for their invaluable contributions and inspiration to this work. Their efforts have played a crucial role in advancing the field of text-to-speech synthesis.
 
 ## 📖 Citation
+
 If you use **IndicF5** in your research or projects, please consider citing it:
 
 ### 🔹 BibTeX
+
 ```bibtex
 @misc{AI4Bharat_IndicF5_2025,
   author       = {Praveen S V and Srija Anand and Soma Siddhartha and Mitesh M. Khapra},
@@ -188,4 +199,3 @@ If you use **IndicF5** in your research or projects, please consider citing it:
   url          = {https://github.com/AI4Bharat/IndicF5},
 }
 ```
-

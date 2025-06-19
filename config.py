@@ -18,6 +18,7 @@ MODEL_CONFIG = {
     "repo_id": os.getenv("MODEL_REPO_ID", "ai4bharat/IndicF5"),
     "trust_remote_code": True,
     "cache_dir": os.getenv("MODEL_CACHE_DIR", None),
+    "hf_token": os.getenv("HF_TOKEN", None),
 }
 
 # Audio Configuration

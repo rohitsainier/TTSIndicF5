@@ -22,6 +22,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from config import get_config, validate_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG, API_CONFIG, LOGGING_CONFIG
 from tts_utils import TTSProcessor
+from huggingface_hub import login
 
 # Configure logging
 config = get_config()
@@ -43,7 +44,10 @@ async def lifespan(app: FastAPI):
     # Startup
     global tts_processor
     logger.info("Initializing TTS Processor...")
-    
+
+    if MODEL_CONFIG["hf_token"]:
+        login(token=MODEL_CONFIG["hf_token"])
+
     # Initialize TTS processor
     tts_processor = TTSProcessor()
     

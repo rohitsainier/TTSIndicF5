@@ -11,18 +11,42 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Virtual environment management
-VENV_DIR=".venv"
-
-if [ ! -d "$VENV_DIR" ]; then
-    echo "📦 Creating virtual environment..."
-    python3 -m venv "$VENV_DIR"
-    echo "✅ Virtual environment created at $VENV_DIR"
+# Check if we're in the chatterbox directory
+if [[ ! -f "tts_api.py" ]]; then
+    echo -e "${RED}Error: Please run this script from the chatterbox directory${NC}"
+    exit 1
 fi
 
-# Activate virtual environment
-echo "🔧 Activating virtual environment..."
-source "$VENV_DIR/bin/activate"
+# Check if conda is available
+if command -v conda >/dev/null 2>&1; then
+    echo -e "${GREEN}Conda detected! Using conda environment...${NC}"
+    
+    # Check if indicf5 environment exists
+    if ! conda env list | grep -q "^indicf5 "; then
+        echo -e "${YELLOW}Creating conda environment 'indicf5'...${NC}"
+        conda create -n indicf5 python=3.12 -y
+    fi
+    
+    # Activate conda environment
+    echo -e "${YELLOW}Activating conda environment 'indicf5'...${NC}"
+    eval "$(conda shell.bash hook)"
+    conda activate indicf5
+    
+else
+    echo -e "${YELLOW}Conda not found. Using virtual environment instead...${NC}"
+    # Virtual environment management
+    VENV_DIR=".venv"
+
+    if [ ! -d "$VENV_DIR" ]; then
+        echo "📦 Creating virtual environment..."
+        python3 -m venv "$VENV_DIR"
+        echo "✅ Virtual environment created at $VENV_DIR"
+    fi
+
+    # Activate virtual environment
+    echo "🔧 Activating virtual environment..."
+    source "$VENV_DIR/bin/activate"
+fi
 
 # Upgrade pip
 echo "⬆️  Upgrading pip..."
@@ -40,9 +64,9 @@ mkdir -p data/out
 mkdir -p data/reference_voices
 
 # Copy reference voices files if they exist and don't already exist in destination
-if [ -d "reference_voices" ] && [ "$(ls -A reference_voices 2>/dev/null)" ]; then
+if [ -d "prompts" ] && [ "$(ls -A prompts 2>/dev/null)" ]; then
     echo "📁 Copying reference voices files to data/reference_voices/..."
-    for file in reference_voices/*.*; do
+    for file in prompts/*.*; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             if [ ! -f "data/reference_voices/$filename" ]; then
@@ -50,6 +74,9 @@ if [ -d "reference_voices" ] && [ "$(ls -A reference_voices 2>/dev/null)" ]; the
             fi
         fi
     done
+    if [ -f "data/reference_voices/prompts.json" ]; then
+        mv data/reference_voices/prompts.json data/reference_voices/reference_voices.json 2>/dev/null || true
+    fi
     echo "✅ Reference voices files copied (skipped existing files)"
 fi
 
