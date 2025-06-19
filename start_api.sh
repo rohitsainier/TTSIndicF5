@@ -37,26 +37,26 @@ fi
 
 # Create required directories
 mkdir -p data/out
-mkdir -p data/prompts
+mkdir -p data/reference_voices
 
-# Copy prompts files if they exist and don't already exist in destination
-if [ -d "prompts" ] && [ "$(ls -A prompts 2>/dev/null)" ]; then
-    echo "📁 Copying prompts files to data/prompts/..."
-    for file in prompts/*.*; do
+# Copy reference voices files if they exist and don't already exist in destination
+if [ -d "reference_voices" ] && [ "$(ls -A reference_voices 2>/dev/null)" ]; then
+    echo "📁 Copying reference voices files to data/reference_voices/..."
+    for file in reference_voices/*.*; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
-            if [ ! -f "data/prompts/$filename" ]; then
-                cp "$file" "data/prompts/" 2>/dev/null || true
+            if [ ! -f "data/reference_voices/$filename" ]; then
+                cp "$file" "data/reference_voices/" 2>/dev/null || true
             fi
         fi
     done
-    echo "✅ Prompts files copied (skipped existing files)"
+    echo "✅ Reference voices files copied (skipped existing files)"
 fi
 
-# Check if prompts.json exists
-if [ ! -f "data/prompts/prompts.json" ]; then
-    echo "⚠️  data/prompts/prompts.json not found. The API will start but no prompts will be available."
-    echo "💡 Make sure to place your prompts.json file and audio files in the data/prompts/ directory."
+# Check if reference_voices.json exists
+if [ ! -f "data/reference_voices/reference_voices.json" ]; then
+    echo "⚠️  data/reference_voices/reference_voices.json not found. The API will start but no reference voices will be available."
+    echo "💡 Make sure to place your reference_voices.json file and audio files in the data/reference_voices/ directory."
 fi
 
 echo "✅ Starting API server on http://localhost:8000"

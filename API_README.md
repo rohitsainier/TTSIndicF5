@@ -12,7 +12,7 @@ A comprehensive REST API for Text-to-Speech using the IndicF5 model, supporting 
 - **Base64 Audio Response**: Get audio data directly in API response
 - **Server-side File Saving**: Save generated audio files on the server
 - **File Metadata Management**: Full CRUD operations for generated file metadata
-- **Prompt Management**: List and manage available reference prompts
+- **Voice Management**: List and manage available reference voices
 - **Health Check**: Monitor API status and model loading
 - **CORS Support**: Ready for web application integration
 
@@ -79,7 +79,7 @@ Convert single text to speech. Audio files are automatically saved to the server
 ```json
 {
   "text": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
-  "prompt_key": "hin_f_happy",
+  "reference_voice_key": "hin_f_happy",
   "output_format": "wav",
   "sample_rate": 24000,
   "normalize": true
@@ -95,7 +95,7 @@ Convert single text to speech. Audio files are automatically saved to the server
   "duration": 2.45,
   "sample_rate": 24000,
   "message": "TTS generation successful",
-  "prompt_info": {
+  "reference_voice_info": {
     "author": "AI4Bharat",
     "content": "नमस्ते",
     "file": "HIN_F_HAPPY_00001.wav",
@@ -113,14 +113,14 @@ Process multiple TTS requests in a single call. All generated files are saved to
   "requests": [
     {
       "text": "पहला वाक्य",
-      "prompt_key": "hin_f_happy",
+      "reference_voice_key": "hin_f_happy",
       "output_format": "wav",
       "sample_rate": 24000,
       "normalize": true
     },
     {
       "text": "दूसरा वाक्य", 
-      "prompt_key": "hin_f_happy",
+      "reference_voice_key": "hin_f_happy",
       "output_format": "wav",
       "sample_rate": 24000,
       "normalize": true
@@ -180,40 +180,40 @@ Delete all generated audio files from the server.
 }
 ```
 
-### Prompt Management Endpoints
+### Voice Management Endpoints
 
-### `GET /api/prompts`
-List all available reference prompts.
+### `GET /api/referenceVoices`
+List all available reference voices.
 
-### `GET /api/prompts/{prompt_key}/audio`
-Download the audio file for a specific prompt.
+### `GET /api/referenceVoices/{reference_voice_key}/audio`
+Download the audio file for a specific voice.
 
-### `POST /api/prompts/upload`
-Upload a new reference prompt to the server.
+### `POST /api/referenceVoices/upload`
+Upload a new reference voice to the server.
 
 **Request:** Multipart form data with:
 - `file`: Audio file (wav, mp3, flac)
-- `name`: Display name for the prompt
-- `author`: Author/source of the prompt
-- `content`: Optional text content for the prompt
+- `name`: Display name for the voice
+- `author`: Author/source of the voice
+- `content`: Optional text content for the voice
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Prompt 'my_voice' uploaded successfully",
-  "prompt_key": "my_voice"
+  "message": "Voice 'my_voice' uploaded successfully",
+  "reference_voice_key": "my_voice"
 }
 ```
 
-### `DELETE /api/prompts/{prompt_key}`
-Delete a reference prompt from the server.
+### `DELETE /api/referenceVoices/{reference_voice_key}`
+Delete a reference voice from the server.
 
 **Response:**
 ```json
 {
   "success": true,
-  "message": "Prompt 'my_voice' deleted successfully"  
+  "message": "Voice 'my_voice' deleted successfully"  
 }
 ```
 
@@ -229,7 +229,7 @@ Get metadata for all generated files with information about file name, prompt us
   "data": [
     {
       "filename": "tts_hin_f_happy_20231201_143052.wav",
-      "prompt_key": "hin_f_happy",
+      "reference_voice_key": "hin_f_happy",
       "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
       "created_datetime": "2023-12-01T14:30:52.123456",
       "size_bytes": 98304,
@@ -251,7 +251,7 @@ Get metadata for a specific generated file.
   "success": true,
   "data": {
     "filename": "tts_hin_f_happy_20231201_143052.wav",
-    "prompt_key": "hin_f_happy",
+    "reference_voice_key": "hin_f_happy",
     "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
     "created_datetime": "2023-12-01T14:30:52.123456",
     "size_bytes": 98304,
@@ -269,7 +269,7 @@ Create metadata entry for an existing file (useful if file exists but metadata i
 ```json
 {
   "filename": "existing_file.wav",
-  "prompt_key": "hin_f_happy",
+  "reference_voice_key": "hin_f_happy",
   "text_input": "Original text used to generate this file",
   "format": "wav"
 }
@@ -281,7 +281,7 @@ Create metadata entry for an existing file (useful if file exists but metadata i
   "success": true,
   "data": {
     "filename": "existing_file.wav",
-    "prompt_key": "hin_f_happy",
+    "reference_voice_key": "hin_f_happy",
     "text_input": "Original text used to generate this file",
     "created_datetime": "2023-12-01T14:30:52.123456",
     "size_bytes": 98304,
@@ -298,7 +298,7 @@ Update metadata for an existing file.
 **Request:**
 ```json
 {
-  "prompt_key": "new_prompt_key",
+  "reference_voice_key": "new_reference_voice_key",
   "text_input": "Updated text description"
 }
 ```
@@ -309,7 +309,7 @@ Update metadata for an existing file.
   "success": true,
   "data": {
     "filename": "tts_hin_f_happy_20231201_143052.wav",
-    "prompt_key": "new_prompt_key",
+    "reference_voice_key": "new_reference_voice_key",
     "text_input": "Updated text description",
     "created_datetime": "2023-12-01T14:30:52.123456",
     "size_bytes": 98304,
@@ -329,7 +329,7 @@ Delete metadata for a specific file (file itself remains intact).
   "success": true,
   "data": {
     "filename": "tts_hin_f_happy_20231201_143052.wav",
-    "prompt_key": "hin_f_happy",
+    "reference_voice_key": "hin_f_happy",
     "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
     "created_datetime": "2023-12-01T14:30:52.123456",
     "size_bytes": 98304,
@@ -367,9 +367,9 @@ Access the web interface for the TTS system.
 ## File Storage
 
 - **Generated Audio Files**: Automatically saved to `PATHS["output_dir"]` (default: `./data/out/`)
-- **Reference Prompts**: Stored in `PATHS["prompts_dir"]` (default: `./data/prompts/`)  
+- **Reference Voices**: Stored in `PATHS["reference_voices_dir"]` (default: `./data/reference_voices/`)  
 - **File Formats**: WAV, MP3, FLAC supported
-- **Naming Convention**: `tts_{prompt_key}_{timestamp}.{format}`
+- **Naming Convention**: `tts_{reference_voice_key}_{timestamp}.{format}`
 
 ## File Metadata Storage
 
@@ -379,7 +379,7 @@ Generated file metadata is automatically stored in `./data/out/files_metadata.js
 {
   "tts_hin_f_happy_20231201_143052.wav": {
     "filename": "tts_hin_f_happy_20231201_143052.wav",
-    "prompt_key": "hin_f_happy",
+    "reference_voice_key": "hin_f_happy",
     "text_input": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
     "created_datetime": "2023-12-01T14:30:52.123456",
     "size_bytes": 98304,
@@ -391,7 +391,7 @@ Generated file metadata is automatically stored in `./data/out/files_metadata.js
 
 The metadata includes:
 - **filename**: Name of the generated audio file
-- **prompt_key**: Which reference prompt was used for generation
+- **reference_voice_key**: Which reference voice was used for generation
 - **text_input**: Original text that was converted to speech
 - **created_datetime**: ISO format timestamp of when file was created
 - **size_bytes**: File size in bytes
@@ -404,7 +404,7 @@ The enhanced web interface (`/web`) now provides comprehensive file metadata man
 
 ### 🎯 **Enhanced File Display**
 - **Original Text Preview**: See the text that was used to generate each file
-- **Reference Prompt Information**: View which prompt was used for generation
+- **Reference Voice Information**: View which voice was used for generation
 - **Metadata Status Indicators**: Visual indicators for files with/without metadata
 - **Interactive File Cards**: Rich file information with embedded audio players
 
@@ -445,7 +445,7 @@ python api_client_example.py
 
 This will:
 1. Check API health
-2. List available prompts
+2. List available referenceVoices
 3. Test single TTS generation
 4. Test batch TTS processing
 5. Test server-side file saving
@@ -481,16 +481,16 @@ This will verify:
 
 ## Configuration
 
-### Prompts Configuration
+### Reference Voicie Configuration
 
-Add new prompts by updating `data/prompts/prompts.json`:
+Add new Reference Voice by updating `data/reference_voices/reference_voices.json`:
 
 ```json
 {
-  "NEW_PROMPT_KEY": {
+  "NEW_REFERENCE_VOICE_KEY": {
     "author": "Voice Actor Name",
     "content": "Reference text content",
-    "file": "data/prompts/audio_file.wav",
+    "file": "data/reference_voices/audio_file.wav",
     "sample_rate": 16000
   }
 }
@@ -500,8 +500,8 @@ Add new prompts by updating `data/prompts/prompts.json`:
 
 - `HOST`: Server host (default: `0.0.0.0`)
 - `PORT`: Server port (default: `8000`)
-- `PROMPTS_FILE`: Path to prompts.json (default: `data/prompts/prompts.json`)
-- `PROMPTS_DIR`: Directory for prompt files (default: `data/prompts`)
+- `REFERENCE_VOICES_FILE`: Path to reference_voices.json (default: `data/reference_voices/reference_voices.json`)
+- `REFERENCE_VOICES_DIR`: Directory for prompt files (default: `data/reference_voices`)
 - `OUTPUT_DIR`: Directory for generated files (default: `data/out`)
 - `MODEL_CACHE_DIR`: Directory for model cache
 
@@ -518,12 +518,12 @@ The API provides detailed error responses:
 
 ```json
 {
-  "detail": "Prompt key 'INVALID_KEY' not found. Available keys: ['TEL_F_WIKI_00001', 'HIN_F_HAPPY_00001', 'PAN_F_HAPPY_00001']"
+  "detail": "Voice key 'INVALID_KEY' not found. Available keys: ['TEL_F_WIKI_00001', 'HIN_F_HAPPY_00001', 'PAN_F_HAPPY_00001']"
 }
 ```
 
 Common error codes:
-- `400`: Bad request (invalid prompt key, malformed input)
+- `400`: Bad request (invalid voice key, malformed input)
 - `500`: Internal server error (model failure, file I/O issues)
 
 ## Production Deployment

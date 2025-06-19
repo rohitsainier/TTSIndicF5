@@ -47,12 +47,12 @@ async def lifespan(app: FastAPI):
     # Initialize TTS processor
     tts_processor = TTSProcessor()
     
-    # Load model and prompts
+    # Load model and referenceVoices
     tts_processor.load_model()
-    tts_processor.load_prompts()
-    
-    logger.info(f"TTS Processor initialized with {len(tts_processor.prompts)} prompts")
-    
+    tts_processor.load_reference_voices()
+
+    logger.info(f"TTS Processor initialized with {len(tts_processor.reference_voices)} referenceVoices")
+
     # Validate configuration
     config_errors = validate_config()
     if config_errors:
@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI):
     
     # Ensure required directories exist
     os.makedirs(PATHS["output_dir"], exist_ok=True)
-    os.makedirs(PATHS["prompts_dir"], exist_ok=True)
-    
+    os.makedirs(PATHS["reference_voices_dir"], exist_ok=True)
+
     yield
     # Shutdown
     logger.info("Shutting down...")
@@ -90,8 +90,8 @@ api_router = APIRouter(prefix="/api", tags=["TTS API"])
 
 # Pydantic models for request/response
 class TTSRequest(BaseModel):
-    text: str = Field(..., description="Text to convert to speech. Supports prompt tags: <prompt key='key'>text</prompt>")
-    prompt_key: str = Field(..., description="Key for the reference audio prompt (used as default for text outside prompt tags)")
+    text: str = Field(..., description="Text to convert to speech. Supports prompt tags: <refvoice key='key'>text</refvoice>")
+    reference_voice_key: str = Field(..., description="Key for the reference audio prompt (used as default for text outside prompt tags)")
     output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
     sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
     normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
@@ -107,7 +107,7 @@ class TTSResponse(BaseModel):
     duration: Optional[float] = None
     sample_rate: int
     message: Optional[str] = None
-    prompt_info: Optional[Dict[str, Any]] = None
+    reference_voice_info: Optional[Dict[str, Any]] = None
 
 class TTSBatchResponse(BaseModel):
     success: bool
@@ -123,14 +123,14 @@ class PromptInfo(BaseModel):
     file: str
     sample_rate: int
 
-class PromptsResponse(BaseModel):
-    prompts: Dict[str, PromptInfo]
+class ReferenceVoicesResponse(BaseModel):
+    reference_voices: Dict[str, PromptInfo]
     total_count: int
 
 # File metadata models for CRUD operations
 class FileMetadata(BaseModel):
     filename: str
-    prompt_key: str
+    reference_voice_key: str
     text_input: str
     created_datetime: str
     size_bytes: int
@@ -139,12 +139,12 @@ class FileMetadata(BaseModel):
 
 class CreateFileMetadataRequest(BaseModel):
     filename: str
-    prompt_key: str
+    reference_voice_key: str
     text_input: str
     format: str = "wav"
 
 class UpdateFileMetadataRequest(BaseModel):
-    prompt_key: Optional[str] = None
+    reference_voice_key: Optional[str] = None
     text_input: Optional[str] = None
 
 class FileMetadataResponse(BaseModel):
@@ -159,8 +159,8 @@ class FileMetadataListResponse(BaseModel):
     message: str
 
 class TTSPromptTaggedRequest(BaseModel):
-    text: str = Field(..., description="Text with <prompt key='key'>text</prompt> tags")
-    base_prompt_key: Optional[str] = Field(None, description="Default prompt key for text outside of prompt tags")
+    text: str = Field(..., description="Text with <refvoice key='key'>text</refvoice> tags")
+    base_reference_voice_key: Optional[str] = Field(None, description="Default prompt key for text outside of prompt tags")
     output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
     sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
     normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
@@ -216,14 +216,14 @@ def save_file_metadata(metadata_dict: Dict[str, FileMetadata]) -> bool:
         logger.error(f"Failed to save metadata file: {e}")
         return False
 
-def create_file_metadata(filename: str, prompt_key: str, text_input: str, format: str = "wav") -> FileMetadata:
+def create_file_metadata(filename: str, reference_voice_key: str, text_input: str, format: str = "wav") -> FileMetadata:
     """Create metadata for a generated file"""
     file_path = os.path.join(PATHS["output_dir"], filename)
     size_bytes = os.path.getsize(file_path) if os.path.exists(file_path) else 0
     
     return FileMetadata(
         filename=filename,
-        prompt_key=prompt_key,
+        reference_voice_key=reference_voice_key,
         text_input=text_input,
         created_datetime=datetime.now().isoformat(),
         size_bytes=size_bytes,
@@ -231,11 +231,11 @@ def create_file_metadata(filename: str, prompt_key: str, text_input: str, format
         file_path=file_path
     )
 
-def add_file_metadata(filename: str, prompt_key: str, text_input: str, format: str = "wav") -> bool:
+def add_file_metadata(filename: str, reference_voice_key: str, text_input: str, format: str = "wav") -> bool:
     """Add metadata for a new file"""
     try:
         metadata_dict = load_file_metadata()
-        metadata = create_file_metadata(filename, prompt_key, text_input, format)
+        metadata = create_file_metadata(filename, reference_voice_key, text_input, format)
         metadata_dict[filename] = metadata
         return save_file_metadata(metadata_dict)
     except Exception as e:
@@ -272,35 +272,35 @@ def delete_file_metadata(filename: str) -> bool:
         logger.error(f"Failed to delete file metadata for {filename}: {e}")
         return False
 
-async def generate_audio_async(text: str, prompt_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
+async def generate_audio_async(text: str, reference_voice_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
     """Async wrapper for TTS processor to run in thread pool"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, prompt_key)
+    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, reference_voice_key)
 
 # New helper functions
 import re
 
-def has_prompt_tags(text: str) -> bool:
+def has_reference_voice_tags(text: str) -> bool:
     """Check if text contains prompt tags"""
-    pattern = r'<prompt\s+key\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</prompt>'
+    pattern = r'<refvoice\s+key\s*=\s*["\']([^"\']+)["\']\s*>(.*?)</refvoice>'
     return bool(re.search(pattern, text, re.DOTALL))
 
-async def process_text_with_intelligent_routing(text: str, prompt_key: str, output_path: str, 
+async def process_text_with_intelligent_routing(text: str, reference_voice_key: str, output_path: str, 
                                                sample_rate: int = 24000, normalize: bool = True,
                                                output_format: str = "wav") -> Dict[str, Any]:
     """
     Intelligently route text processing based on whether it contains prompt tags
     """
     # Check if text contains prompt tags
-    if has_prompt_tags(text):
+    if has_reference_voice_tags(text):
         logger.info("Text contains prompt tags, using prompt-tagged processing")
         # Use prompt tagged processing
         loop = asyncio.get_event_loop()
         result = await loop.run_in_executor(
             executor, 
-            tts_processor.process_prompt_tagged_text,
+            tts_processor.process_reference_voice_tagged_text,
             text,
-            prompt_key,  # base_prompt_key for untagged text
+            reference_voice_key,  # base_reference_voice_key for untagged text
             output_path,
             sample_rate,
             normalize,
@@ -318,7 +318,7 @@ async def process_text_with_intelligent_routing(text: str, prompt_key: str, outp
                 executor,
                 tts_processor.process_single_text,
                 text,
-                prompt_key,
+                reference_voice_key,
                 output_path,
                 sample_rate,
                 normalize,
@@ -327,7 +327,7 @@ async def process_text_with_intelligent_routing(text: str, prompt_key: str, outp
             return result
         else:
             # Use direct generation for short texts
-            audio, prompt_info = await generate_audio_async(text, prompt_key)
+            audio, reference_voice_info = await generate_audio_async(text, reference_voice_key)
             
             # Normalize audio if requested
             if normalize:
@@ -340,7 +340,7 @@ async def process_text_with_intelligent_routing(text: str, prompt_key: str, outp
             return {
                 "success": True,
                 "audio_data": audio,
-                "prompt_info": prompt_info,
+                "reference_voice_info": reference_voice_info,
                 "message": "TTS generation successful"
             }
 
@@ -385,11 +385,11 @@ async def api_root():
         "endpoints": {
             "single_tts": "/api/tts",
             "batch_tts": "/api/tts/batch",
-            "prompts": "/api/prompts",
+            "reference_voices": "/api/referenceVoices",
             "health": "/api/health"
         },
         "features": {
-            "prompt_tags": "The /api/tts endpoints automatically detect and process <prompt key='key'>text</prompt> tags"
+            "reference_voice_tags": "The /api/tts endpoints automatically detect and process <refvoice key='key'>text</refvoice> tags"
         }
     }
 
@@ -399,33 +399,33 @@ async def health_check():
     return {
         "status": "healthy",
         "model_loaded": tts_processor is not None and tts_processor.model is not None,
-        "prompts_loaded": tts_processor is not None and len(tts_processor.prompts) > 0,
-        "available_prompts": len(tts_processor.prompts) if tts_processor else 0
+        "reference_voices_loaded": tts_processor is not None and len(tts_processor.reference_voices) > 0,
+        "available_reference_voices": len(tts_processor.reference_voices) if tts_processor else 0
     }
 
-@api_router.get("/prompts", response_model=PromptsResponse)
-async def get_prompts():
-    """Get all available prompts"""
-    formatted_prompts = {}
-    for key, value in tts_processor.prompts.items():
-        formatted_prompts[key] = PromptInfo(**value)
-    
-    return PromptsResponse(
-        prompts=formatted_prompts,
-        total_count=len(tts_processor.prompts)
+@api_router.get("/referenceVoices", response_model=ReferenceVoicesResponse)
+async def get_reference_voices():
+    """Get all available reference voices"""
+    formatted_voices = {}
+    for key, value in tts_processor.reference_voices.items():
+        formatted_voices[key] = PromptInfo(**value)
+
+    return ReferenceVoicesResponse(
+        reference_voices=formatted_voices,
+        total_count=len(tts_processor.reference_voices)
     )
 
-@api_router.get("/prompts/{prompt_key}/audio")
-async def get_prompt_audio(prompt_key: str):
-    """Get audio file for a specific prompt"""
-    if prompt_key not in tts_processor.prompts:
+@api_router.get("/referenceVoices/{voice_key}/audio")
+async def get_reference_voice_audio(voice_key: str):
+    """Get audio file for a specific reference voice"""
+    if voice_key not in tts_processor.reference_voices:
         raise HTTPException(
             status_code=404, 
-            detail=f"Prompt key '{prompt_key}' not found"
+            detail=f"Voice key '{voice_key}' not found"
         )
-    
-    prompt_info = tts_processor.prompts[prompt_key]
-    audio_file_path = f"{PATHS['prompts_dir']}/{prompt_info['file']}"
+
+    voice_info = tts_processor.reference_voices[voice_key]
+    audio_file_path = f"{PATHS['reference_voices_dir']}/{voice_info['file']}"
 
     # Check if file exists
     if not os.path.exists(audio_file_path):
@@ -445,17 +445,17 @@ async def text_to_speech(request: TTSRequest):
     """
     Convert single text to speech with intelligent prompt tag detection.
     
-    Automatically detects and processes <prompt key="key">text</prompt> tags in the input text.
-    If no prompt tags are found, uses the provided prompt_key for the entire text.
+    Automatically detects and processes <refvoice key="key">text</refvoice> tags in the input text.
+    If no prompt tags are found, uses the provided reference_voice_key for the entire text.
     """
     try:
         start_time = datetime.now()
-        
-        # Validate prompt key
-        if request.prompt_key not in tts_processor.prompts:
+
+        # Validate referenceVoices key
+        if request.reference_voice_key not in tts_processor.reference_voices:
             raise HTTPException(
                 status_code=400, 
-                detail=f"Prompt key '{request.prompt_key}' not found. Available keys: {list(tts_processor.prompts.keys())}"
+                detail=f"Voice key '{request.reference_voice_key}' not found. Available keys: {list(tts_processor.reference_voices.keys())}"
             )
         
         # Ensure output directory exists
@@ -463,13 +463,13 @@ async def text_to_speech(request: TTSRequest):
         
         # Generate filename and path
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"tts_{request.prompt_key}_{timestamp}.{request.output_format}"
+        filename = f"tts_{request.reference_voice_key}_{timestamp}.{request.output_format}"
         file_path = os.path.join(PATHS["output_dir"], filename)
         
         # Use intelligent routing based on prompt tags
         result = await process_text_with_intelligent_routing(
             text=request.text,
-            prompt_key=request.prompt_key,
+            reference_voice_key=request.reference_voice_key,
             output_path=file_path,
             sample_rate=request.sample_rate,
             normalize=request.normalize,
@@ -482,10 +482,10 @@ async def text_to_speech(request: TTSRequest):
         # Load the generated audio for base64 conversion
         audio_data = result["audio_data"]
         audio_base64 = audio_to_base64(audio_data, request.sample_rate, request.output_format)
-        prompt_info = result["prompt_info"]
+        reference_voice_info = result["reference_voice_info"]
         
         # Add file metadata
-        add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
+        add_file_metadata(filename, request.reference_voice_key, request.text, request.output_format)
         
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -496,7 +496,7 @@ async def text_to_speech(request: TTSRequest):
             filename=filename,
             duration=duration,
             sample_rate=request.sample_rate,
-            prompt_info=prompt_info,
+            reference_voice_info=reference_voice_info,
             message="TTS generation successful"
         )
         
@@ -511,8 +511,8 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
     """
     Convert multiple texts to speech with intelligent prompt tag detection.
     
-    Each request automatically detects and processes <prompt key="key">text</prompt> tags.
-    If no prompt tags are found in a request, uses the provided prompt_key for the entire text.
+    Each request automatically detects and processes <refvoice key="key">text</refvoice> tags.
+    If no prompt tags are found in a request, uses the provided reference_voice_key for the entire text.
     """
     """Convert multiple texts to speech"""
     try:
@@ -523,7 +523,7 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
         
         # Prepare data for batch processing
         texts = [req.text for req in batch_request.requests]
-        prompt_keys = [req.prompt_key for req in batch_request.requests]
+        reference_voice_keys = [req.reference_voice_key for req in batch_request.requests]
         
         # Use TTS processor for batch processing
         results = []
@@ -533,18 +533,18 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
         for i, request in enumerate(batch_request.requests):
             try:
                 # Validate prompt key
-                if not tts_processor.validate_prompt_key(request.prompt_key):
-                    raise ValueError(f"Prompt key '{request.prompt_key}' not found")
+                if not tts_processor.validate_reference_voice_key(request.reference_voice_key):
+                    raise ValueError(f"Prompt key '{request.reference_voice_key}' not found")
                 
                 # Generate filename and path
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                filename = f"tts_batch_{i}_{request.prompt_key}_{timestamp}.{request.output_format}"
+                filename = f"tts_batch_{i}_{request.reference_voice_key}_{timestamp}.{request.output_format}"
                 file_path = os.path.join(PATHS["output_dir"], filename)
                 
                 # Use intelligent routing based on prompt tags
                 result = await process_text_with_intelligent_routing(
                     text=request.text,
-                    prompt_key=request.prompt_key,
+                    reference_voice_key=request.reference_voice_key,
                     output_path=file_path,
                     sample_rate=request.sample_rate,
                     normalize=request.normalize,
@@ -556,14 +556,14 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
                     audio_base64 = audio_to_base64(result["audio_data"], request.sample_rate, request.output_format)
                     
                     # Add file metadata
-                    add_file_metadata(filename, request.prompt_key, request.text, request.output_format)
+                    add_file_metadata(filename, request.reference_voice_key, request.text, request.output_format)
                     
                     results.append(TTSResponse(
                         success=True,
                         audio_base64=audio_base64,
                         filename=filename,
                         sample_rate=request.sample_rate,
-                        prompt_info=result["prompt_info"],
+                        reference_voice_info=result["reference_voice_info"],
                         message="TTS generation successful"
                     ))
                     successful_requests += 1
@@ -601,7 +601,7 @@ async def batch_text_to_speech(batch_request: TTSBatchRequest):
         raise HTTPException(status_code=500, detail=f"Batch TTS processing failed: {str(e)}")
 
 @api_router.post("/tts/prompt-tagged", response_model=TTSPromptTaggedResponse)
-async def prompt_tagged_text_to_speech(request: TTSPromptTaggedRequest):
+async def reference_voice_tagged_text_to_speech(request: TTSPromptTaggedRequest):
     """Convert text with prompt tags to speech"""
     try:
         start_time = datetime.now()
@@ -611,13 +611,13 @@ async def prompt_tagged_text_to_speech(request: TTSPromptTaggedRequest):
         
         # Generate filename and path
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"tts_prompt_tagged_{timestamp}.{request.output_format}"
+        filename = f"tts_reference_voice_tagged_{timestamp}.{request.output_format}"
         file_path = os.path.join(PATHS["output_dir"], filename)
         
         # Use TTS processor for prompt tagged processing
-        result = tts_processor.process_prompt_tagged_text(
+        result = tts_processor.process_reference_voice_tagged_text(
             text=request.text,
-            base_prompt_key=request.base_prompt_key,
+            base_reference_voice_key=request.base_reference_voice_key,
             output_path=file_path,
             sample_rate=request.sample_rate,
             normalize=request.normalize,
@@ -632,8 +632,8 @@ async def prompt_tagged_text_to_speech(request: TTSPromptTaggedRequest):
         audio_base64 = audio_to_base64(result["audio_data"], request.sample_rate, request.output_format)
         
         # Add file metadata (use the first prompt key or base prompt key for metadata)
-        prompt_key_for_metadata = request.base_prompt_key or "multi_prompt"
-        add_file_metadata(filename, prompt_key_for_metadata, request.text, request.output_format)
+        reference_voice_key_for_metadata = request.base_reference_voice_key or "multi_prompt"
+        add_file_metadata(filename, reference_voice_key_for_metadata, request.text, request.output_format)
         
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
@@ -830,82 +830,82 @@ async def clear_all_files():
         logger.error(f"Failed to clear files: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to clear files: {str(e)}")
 
-# Add upload and delete endpoints for prompts
-@api_router.post("/prompts/upload")
-async def upload_prompt(file: UploadFile = File(...), name: str = Form(...), author: str = Form(...), content: str = Form("")):
-    """Upload a new prompt audio file"""
+# Add upload and delete endpoints for reference voices
+@api_router.post("/referenceVoices/upload")
+async def upload_reference_voice(file: UploadFile = File(...), name: str = Form(...), author: str = Form(...), content: str = Form("")):
+    """Upload a new reference voice audio file"""
     try:
         # Validate file type
         if not file.content_type.startswith('audio/'):
             raise HTTPException(status_code=400, detail="File must be an audio file")
-        
-        # Ensure prompts directory exists
-        os.makedirs(PATHS["prompts_dir"], exist_ok=True)
-        
+
+        # Ensure reference voices directory exists
+        os.makedirs(PATHS["reference_voices_dir"], exist_ok=True)
+
         # Generate filename
         file_extension = file.filename.split('.')[-1].lower() if '.' in file.filename else 'wav'
         safe_name = "".join(c for c in name if c.isalnum() or c in (' ', '-', '_')).rstrip()
         filename = f"{safe_name}.{file_extension}"
-        file_path = os.path.join(PATHS["prompts_dir"], filename)
-        
+        file_path = os.path.join(PATHS["reference_voices_dir"], filename)
+
         # Save file
         with open(file_path, "wb") as buffer:
             content_bytes = await file.read()
             buffer.write(content_bytes)
-        
-        # Update prompts.json
-        prompt_key = safe_name.lower().replace(' ', '_')
-        tts_processor.prompts[prompt_key] = {
+
+        # Update reference_voices.json
+        voice_key = safe_name.lower().replace(' ', '_')
+        tts_processor.reference_voices[voice_key] = {
             "author": author,
             "content": content or f"Sample content for {name}",
             "file": filename,
             "sample_rate": AUDIO_CONFIG["default_sample_rate"]
         }
-        
-        # Save updated prompts.json
-        with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
-            json.dump(tts_processor.prompts, f, indent=2, ensure_ascii=False)
-        
+
+        # Save updated reference_voices.json
+        with open(PATHS["reference_voices_file"], "w", encoding="utf-8") as f:
+            json.dump(tts_processor.reference_voices, f, indent=2, ensure_ascii=False)
+
         return {
             "success": True,
-            "message": f"Prompt '{name}' uploaded successfully",
-            "prompt_key": prompt_key
+            "message": f"Voice '{name}' uploaded successfully",
+            "voice_key": voice_key
         }
         
     except Exception as e:
-        logger.error(f"Failed to upload prompt: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload prompt: {str(e)}")
+        logger.error(f"Failed to upload voice: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload voice: {str(e)}")
 
-@api_router.delete("/prompts/{prompt_key}")
-async def delete_prompt(prompt_key: str):
-    """Delete a prompt"""
+@api_router.delete("/referenceVoices/{voice_key}")
+async def delete_reference_voice(voice_key: str):
+    """Delete a reference voice"""
     try:
-        if prompt_key not in tts_processor.prompts:
-            raise HTTPException(status_code=404, detail=f"Prompt key '{prompt_key}' not found")
-        
+        if voice_key not in tts_processor.reference_voices:
+            raise HTTPException(status_code=404, detail=f"Voice key '{voice_key}' not found")
+
         # Remove audio file
-        prompt_info = tts_processor.prompts[prompt_key]
-        audio_file_path = os.path.join(PATHS["prompts_dir"], prompt_info["file"])
+        voice_info = tts_processor.reference_voices[voice_key]
+        audio_file_path = os.path.join(PATHS["reference_voices_dir"], voice_info["file"])
         if os.path.exists(audio_file_path):
             os.remove(audio_file_path)
-        
-        # Remove from prompts dict
-        del tts_processor.prompts[prompt_key]
-        
-        # Save updated prompts.json
-        with open(PATHS["prompts_file"], "w", encoding="utf-8") as f:
-            json.dump(tts_processor.prompts, f, indent=2, ensure_ascii=False)
-        
+
+        # Remove from referenceVoices dict
+        del tts_processor.reference_voices[voice_key]
+
+        # Save updated reference_voices.json
+        with open(PATHS["reference_voices_file"], "w", encoding="utf-8") as f:
+            json.dump(tts_processor.reference_voices, f, indent=2, ensure_ascii=False)
+
         return {
             "success": True,
-            "message": f"Prompt '{prompt_key}' deleted successfully"
+            "message": f"Voice '{voice_key}' deleted successfully"
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to delete prompt {prompt_key}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to delete prompt: {str(e)}")
+        logger.error(f"Failed to delete voice {voice_key}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete voice: {str(e)}")
 
 # File Metadata CRUD Endpoints
 @api_router.get("/files/metadata", response_model=FileMetadataListResponse)
@@ -964,12 +964,12 @@ async def create_file_metadata_entry(request: CreateFileMetadataRequest):
         if filename in metadata_dict:
             raise HTTPException(status_code=409, detail=f"Metadata for file '{filename}' already exists")
         
-        # Validate prompt key
-        if request.prompt_key not in tts_processor.prompts:
-            raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
-        
+        # Validate referenceVoices key
+        if request.reference_voice_key not in tts_processor.reference_voices:
+            raise HTTPException(status_code=400, detail=f"Voice key '{request.reference_voice_key}' not found")
+
         # Create and save metadata
-        success = add_file_metadata(filename, request.prompt_key, request.text_input, request.format)
+        success = add_file_metadata(filename, request.reference_voice_key, request.text_input, request.format)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to create file metadata")
         
@@ -1001,12 +1001,12 @@ async def update_file_metadata_entry(filename: str, request: UpdateFileMetadataR
         
         # Prepare updates
         updates = {}
-        if request.prompt_key is not None:
-            # Validate prompt key
-            if request.prompt_key not in tts_processor.prompts:
-                raise HTTPException(status_code=400, detail=f"Prompt key '{request.prompt_key}' not found")
-            updates["prompt_key"] = request.prompt_key
-        
+        if request.reference_voice_key is not None:
+            # Validate referenceVoices key
+            if request.reference_voice_key not in tts_processor.reference_voices:
+                raise HTTPException(status_code=400, detail=f"Voice key '{request.reference_voice_key}' not found")
+            updates["reference_voice_key"] = request.reference_voice_key
+
         if request.text_input is not None:
             updates["text_input"] = request.text_input
         

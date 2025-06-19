@@ -17,20 +17,20 @@ model = AutoModel.from_pretrained(repo_id, trust_remote_code=True)
 end_time = time()
 print(f"Model loaded in {end_time - start_time:.2f} seconds")
 
-# load prompts from data/prompts/prompts.json
+# load reference voices from data/reference_voices/reference_voices.json
 
-with open("data/prompts/prompts.json", "r", encoding="utf-8") as f:
-    prompts = json.load(f)
+with open("data/reference_voices/reference_voices.json", "r", encoding="utf-8") as f:
+    reference_voices = json.load(f)
 
-prompt_key = "PAN_F_HAPPY_00001"
+reference_voice_key = "PAN_F_HAPPY_00001"
 text_to_convert = "కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి. పిచుక నిస్సహాయంగా ఏమి చేయాలో తెలీకా అటూ ఇటూ గెంతుతూ వుంది. ఇంతలో ఆ పొలం రైతులు పరిగెత్తుకుంటూ వచ్చి ఒక పెద్ద కర్రతో ఆ కాకులను కొట్టడం మొదలెట్టారు. కాకుల గుంపుకు ఇది అలవాటే, అవి తుర్రున ఎగిరిపోయాయి. పిచుక రైతులకు దొరికిపోయింది."
 
 start_time = time()
 # Generate speech
 audio = model(
     text_to_convert,
-    ref_audio_path=prompts[prompt_key]["file"],
-    ref_text=prompts[prompt_key]["content"],
+    ref_audio_path=reference_voices[reference_voice_key]["file"],
+    ref_text=reference_voices[reference_voice_key]["content"],
 )
 end_time = time()
 print(f"Speech generation took {end_time - start_time:.2f} seconds")

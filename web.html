@@ -75,11 +75,11 @@
       transition: all 0.2s ease;
     }
 
-    .prompt-item {
+    .reference-voice-item {
       transition: all 0.3s ease;
     }
 
-    .prompt-item:hover {
+    .reference-voice-item:hover {
       transform: scale(1.02);
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
     }
@@ -125,40 +125,41 @@
   <main class="container mx-auto px-4 py-6">
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
 
-      <!-- Left Column: Available Reference Prompts -->
+      <!-- Left Column: Available Reference Voices -->
       <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-2xl font-bold chalk-text text-chalk-100">🎭 Reference Prompts</h2>
-          <button onclick="loadPrompts()"
+          <h2 class="text-2xl font-bold chalk-text text-chalk-100">🎭 Reference Voices</h2>
+          <button onclick="loadReferenceVoices()"
             class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md transition-colors duration-200">
             🔄
           </button>
         </div>
 
-        <!-- Upload New Reference Prompt -->
+        <!-- Upload New Reference Voice -->
         <div class="mb-6 p-4 bg-chalkboard-800 rounded-lg border border-chalk-700">
-          <h3 class="text-lg font-semibold text-chalk-200 mb-3">📤 Upload New Reference Prompt</h3>
+          <h3 class="text-lg font-semibold text-chalk-200 mb-3">📤 Upload New Reference Voice</h3>
           <div class="space-y-3">
-            <input type="file" id="promptFile" accept="audio/*"
+            <input type="file" id="referenceVoiceFile" accept="audio/*"
               class="w-full text-chalk-200 bg-chalkboard-700 border border-chalk-600 rounded-md p-2 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-chalk-600 file:text-chalkboard-900 hover:file:bg-chalk-500">
-            <input type="text" id="promptName" placeholder="Reference prompt name..."
+            <input type="text" id="referenceVoiceName" placeholder="Reference voice name..."
               class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none">
-            <input type="text" id="promptAuthor" placeholder="Author name..."
+            <input type="text" id="referenceVoiceAuthor" placeholder="Author name..."
               class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none">
-            <textarea id="promptContent" placeholder="Enter the reference text content (in any Indian language)..."
+            <textarea id="referenceVoiceContent"
+              placeholder="Enter the reference text content (in any Indian language)..."
               class="w-full h-24 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none"></textarea>
-            <button onclick="uploadPrompt()"
+            <button onclick="uploadReferenceVoices()"
               class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-4 rounded-md font-semibold transition-colors duration-200">
-              Upload Reference Prompt
+              Upload Reference Voice
             </button>
           </div>
         </div>
 
-        <!-- Reference Prompts List -->
-        <div id="promptsList" class="space-y-3 max-h-96 overflow-y-auto">
+        <!-- Reference Voices List -->
+        <div id="referenceVoicesList" class="space-y-3 max-h-96 overflow-y-auto">
           <div class="flex items-center justify-center py-8">
             <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
-            <span class="text-chalk-300">Loading reference prompts...</span>
+            <span class="text-chalk-300">Loading reference voices...</span>
           </div>
         </div>
       </div>
@@ -176,10 +177,10 @@
           </div>
 
           <div>
-            <label for="singlePrompt" class="block text-chalk-200 font-semibold mb-2">Reference Prompt:</label>
-            <select id="singlePrompt" required
+            <label for="singleReferenceVoice" class="block text-chalk-200 font-semibold mb-2">Reference Voice:</label>
+            <select id="singleReferenceVoice" required
               class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
-              <option value="">Select a reference prompt...</option>
+              <option value="">Select a reference voice...</option>
             </select>
           </div>
 
@@ -482,12 +483,12 @@
   </main>
 
   <script>    const API_BASE = 'http://localhost:8000/api';
-    let availablePrompts = {};
+    let availableReferenceVoices = {};
 
     // Initialize the page
     document.addEventListener( 'DOMContentLoaded', function () {
       checkHealth();
-      loadPrompts();
+      loadReferenceVoices();
       loadGeneratedFiles();
       addBatchItem(); // Add initial batch item
 
@@ -510,7 +511,7 @@
           statusDiv.innerHTML = `
             <div class="flex items-center text-green-200">
               <span class="mr-2">✅</span>
-              <span>API is healthy - Model: ${data.model_loaded ? '✅' : '❌'} - Prompts: ${data.available_prompts}</span>
+              <span>API is healthy - Model: ${data.model_loaded ? '✅' : '❌'} - Voices: ${data.available_reference_voices}</span>
             </div>
           `;
         } else {
@@ -533,76 +534,76 @@
       }
     }
 
-    async function loadPrompts() {
-      const promptsDiv = document.getElementById( 'promptsList' );
+    async function loadReferenceVoices() {
+      const referenceVoicesDiv = document.getElementById( 'referenceVoicesList' );
 
-      promptsDiv.innerHTML = `
+      referenceVoicesDiv.innerHTML = `
         <div class="flex items-center justify-center py-8">
           <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
-          <span class="text-chalk-300">Loading prompts...</span>
+          <span class="text-chalk-300">Loading voices...</span>
         </div>
       `;
 
       try {
-        const response = await fetch( `${API_BASE}/prompts` );
+        const response = await fetch( `${API_BASE}/referenceVoices` );
         const data = await response.json();
 
-        availablePrompts = data.prompts;
+        availableReferenceVoices = data.reference_voices;
 
-        // Update prompts display
-        let promptsHtml = '';
-        for ( const [ key, prompt ] of Object.entries( data.prompts ) ) {
-          promptsHtml += `
-            <div class="prompt-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
+        // Update referenceVoices display
+        let referenceVoicesHtml = '';
+        for ( const [ key, referenceVoices ] of Object.entries( data.reference_voices ) ) {
+          referenceVoicesHtml += `
+            <div class="referenceVoices-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="font-semibold text-chalk-100">${key}</h4>
-                <button onclick="deletePrompt('${key}')" class="text-red-400 hover:text-red-300 text-sm">
+                <button onclick="deleteReferenceVoices('${key}')" class="text-red-400 hover:text-red-300 text-sm">
                   🗑️
                 </button>
               </div>
-              <p class="text-chalk-300 text-sm mb-2">by ${prompt.author}</p>
-              <p class="text-chalk-400 text-xs mb-3">${prompt.content.substring( 0, 80 )}...</p>
+              <p class="text-chalk-300 text-sm mb-2">by ${referenceVoices.author}</p>
+              <p class="text-chalk-400 text-xs mb-3">${referenceVoices.content.substring( 0, 80 )}...</p>
               <audio controls class="w-full h-8" style="filter: hue-rotate(90deg);">
-                <source src="${API_BASE}/prompts/${key}/audio" type="audio/wav">
+                <source src="${API_BASE}/referenceVoices/${key}/audio" type="audio/wav">
               </audio>
             </div>
           `;
         }
 
-        promptsDiv.innerHTML = promptsHtml || '<div class="text-center text-chalk-400 py-8">No prompts available</div>';
+        referenceVoicesDiv.innerHTML = referenceVoicesHtml || '<div class="text-center text-chalk-400 py-8">No voices available</div>';
 
         // Update select options
-        updatePromptSelects();
+        updateReferenceVoicesSelects();
 
       } catch ( error ) {
-        promptsDiv.innerHTML = '<div class="text-center text-red-400 py-8">❌ Failed to load prompts</div>';
+        referenceVoicesDiv.innerHTML = '<div class="text-center text-red-400 py-8">❌ Failed to load voices</div>';
       }
     }
 
-    function updatePromptSelects() {
-      const selects = document.querySelectorAll( '#singlePrompt, .batch-prompt' );
+    function updateReferenceVoicesSelects() {
+      const selects = document.querySelectorAll( '#singleReferenceVoice, .batch-reference-voice' );
       selects.forEach( select => {
         const currentValue = select.value;
-        select.innerHTML = '<option value="">Select a reference prompt...</option>';
+        select.innerHTML = '<option value="">Select a reference voice...</option>';
 
-        for ( const [ key, prompt ] of Object.entries( availablePrompts ) ) {
+        for ( const [ key, referenceVoices ] of Object.entries( availableReferenceVoices ) ) {
           const option = document.createElement( 'option' );
           option.value = key;
-          option.textContent = `${key} - ${prompt.author}`;
+          option.textContent = `${key} - ${referenceVoices.author}`;
           select.appendChild( option );
         }
 
-        if ( currentValue && availablePrompts[ currentValue ] ) {
+        if ( currentValue && availableReferenceVoices[ currentValue ] ) {
           select.value = currentValue;
         }
       } );
     }
 
-    async function uploadPrompt() {
-      const fileInput = document.getElementById( 'promptFile' );
-      const nameInput = document.getElementById( 'promptName' );
-      const authorInput = document.getElementById( 'promptAuthor' );
-      const contentInput = document.getElementById( 'promptContent' );
+    async function uploadReferenceVoices() {
+      const fileInput = document.getElementById( 'referenceVoiceFile' );
+      const nameInput = document.getElementById( 'referenceVoiceName' );
+      const authorInput = document.getElementById( 'referenceVoiceAuthor' );
+      const contentInput = document.getElementById( 'referenceVoiceContent' );
 
       if ( !fileInput.files[ 0 ] || !nameInput.value || !authorInput.value || !contentInput.value ) {
         alert( 'Please fill all fields and select an audio file' );
@@ -616,7 +617,7 @@
       formData.append( 'content', contentInput.value );
 
       try {
-        const response = await fetch( `${API_BASE}/prompts/upload`, {
+        const response = await fetch( `${API_BASE}/referenceVoices/upload`, {
           method: 'POST',
           body: formData
         } );
@@ -628,38 +629,38 @@
           nameInput.value = '';
           authorInput.value = '';
           contentInput.value = '';
-          loadPrompts();
+          loadReferenceVoices();
         } else {
-          alert( `Failed to upload prompt: ${data.detail || 'Unknown error'}` );
+          alert( `Failed to upload referenceVoice: ${data.detail || 'Unknown error'}` );
         }
       } catch ( error ) {
-        alert( 'Error uploading prompt: ' + error.message );
+        alert( 'Error uploading referenceVoice: ' + error.message );
       }
     }
 
-    async function deletePrompt( promptKey ) {
-      if ( !confirm( `Are you sure you want to delete "${promptKey}"?` ) ) return;
+    async function deleteReferenceVoice( referenceVoiceKey ) {
+      if ( !confirm( `Are you sure you want to delete "${referenceVoiceKey}"?` ) ) return;
 
       try {
-        const response = await fetch( `${API_BASE}/prompts/${promptKey}`, {
+        const response = await fetch( `${API_BASE}/referenceVoices/${referenceVoiceKey}`, {
           method: 'DELETE'
         } );
 
         const data = await response.json();
         if ( response.ok && data.success ) {
           alert( data.message );
-          loadPrompts();
+          loadReferenceVoices();
         } else {
-          alert( `Failed to delete prompt: ${data.detail || 'Unknown error'}` );
+          alert( `Failed to delete referenceVoice: ${data.detail || 'Unknown error'}` );
         }
       } catch ( error ) {
-        alert( 'Error deleting prompt: ' + error.message );
+        alert( 'Error deleting referenceVoice: ' + error.message );
       }
     }
 
     async function generateSingleTTS() {
       const text = document.getElementById( 'singleText' ).value;
-      const promptKey = document.getElementById( 'singlePrompt' ).value;
+      const referenceVoiceKey = document.getElementById( 'singleReferenceVoice' ).value;
       const format = document.getElementById( 'singleFormat' ).value;
       const sampleRate = parseInt( document.getElementById( 'sampleRate' ).value );
       const normalize = document.getElementById( 'normalize' ).checked;
@@ -683,7 +684,7 @@
           },
           body: JSON.stringify( {
             text: text,
-            prompt_key: promptKey,
+            reference_voice_key: referenceVoiceKey,
             output_format: format,
             sample_rate: sampleRate,
             normalize: normalize
@@ -768,13 +769,13 @@
         </div>
         <div class="space-y-2">
           <textarea class="batch-text w-full h-20 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none" placeholder="Enter text..."></textarea>
-          <select class="batch-prompt w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm focus:border-chalk-500 focus:outline-none">
-            <option value="">Select a reference prompt...</option>
+          <select class="batch-reference-voice w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm focus:border-chalk-500 focus:outline-none">
+            <option value="">Select a reference voice...</option>
           </select>
         </div>
       `;
       container.appendChild( newItem );
-      updatePromptSelects();
+      updateReferenceVoicesSelects();
     }
 
     function removeBatchItem( button ) {
@@ -790,12 +791,12 @@
 
       for ( const item of batchItems ) {
         const text = item.querySelector( '.batch-text' ).value;
-        const promptKey = item.querySelector( '.batch-prompt' ).value;
+        const referenceVoiceKey = item.querySelector( '.batch-reference-voice' ).value;
 
-        if ( text && promptKey ) {
+        if ( text && referenceVoiceKey ) {
           requests.push( {
             text: text,
-            prompt_key: promptKey,
+            reference_voice_key: referenceVoiceKey,
             output_format: 'wav',
             sample_rate: 24000,
             normalize: true
@@ -943,10 +944,10 @@
 
             // Prepare display text for the original input
             let textPreview = '';
-            let promptInfo = '';
+            let referenceVoiceInfo = '';
 
             if ( metadata ) {
-              promptInfo = `<div><strong>Reference Prompt:</strong> ${metadata.prompt_key}</div>`;
+              referenceVoiceInfo = `<div><strong>Reference Voice:</strong> ${metadata.reference_voice_key}</div>`;
 
               // Truncate long text with ellipsis
               if ( metadata.text_input && metadata.text_input.length > 0 ) {
@@ -980,7 +981,7 @@
                   <div><strong>Format:</strong> ${file.format.toUpperCase()}</div>
                   <div><strong>Size:</strong> ${fileSizeKB}KB</div>
                   <div><strong>Created:</strong> ${fileDate}</div>
-                  ${promptInfo}
+                  ${referenceVoiceInfo}
                 </div>
                 ${textPreview}
                 <audio controls class="w-full h-8 mb-3 mt-3" style="filter: hue-rotate(90deg);">

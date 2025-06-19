@@ -19,10 +19,10 @@ def example_1_simple_generation():
     """Example 1: Simple single text generation"""
     print("=== Example 1: Simple Single Text Generation ===")
     
-    # Simple one-line generation (automatically loads model and prompts)
+    # Simple one-line generation (automatically loads model and referenceVoices)
     result = generate_speech(
         text="Hello, this is a test of the TTS system.",
-        prompt_key="hin_f_happy_00001",  # Make sure this prompt exists in your prompts.json
+        reference_voice_key="hin_f_happy_00001",  # Make sure this referenceVoices exists in your reference_voices.json
         output_path="output_simple.wav"
     )
     
@@ -39,10 +39,10 @@ def example_2_processor_instance():
     
     # Create and configure processor
     processor = create_tts_processor(auto_load=True)
-    
-    # Check available prompts
-    print(f"Available prompts: {list(processor.prompts.keys())}")
-    
+
+    # Check available referenceVoices
+    print(f"Available referenceVoices: {list(processor.reference_voices.keys())}")
+
     # Generate multiple audios with the same processor
     texts = [
         "This is the first sentence.",
@@ -53,7 +53,7 @@ def example_2_processor_instance():
     for i, text in enumerate(texts):
         result = processor.process_single_text(
             text=text,
-            prompt_key="hin_f_happy_00001",  # Change this to match your available prompts
+            reference_voice_key="hin_f_happy_00001",  # Change this to match your available referenceVoices
             output_path=f"output_example2_{i+1}.wav",
             sample_rate=24000,
             normalize=True
@@ -76,10 +76,10 @@ def example_3_batch_processing():
         "The system can handle various lengths of text and will automatically chunk longer texts for better quality.",
         "Each text gets its own audio file with proper naming conventions."
     ]
-    
-    # Corresponding prompt keys (you can use different prompts for each text)
-    prompt_keys = [
-        "hin_f_happy_00001",  # Change these to match your available prompts
+
+    # Corresponding referenceVoices keys (you can use different referenceVoices for each text)
+    reference_voices_keys = [
+        "hin_f_happy_00001",  # Change these to match your available referenceVoices
         "hin_f_happy_00001",
         "hin_f_happy_00001", 
         "hin_f_happy_00001"
@@ -88,7 +88,7 @@ def example_3_batch_processing():
     # Process batch
     results = generate_speech_batch(
         texts=texts,
-        prompt_keys=prompt_keys,
+        reference_voices_keys=reference_voices_keys,
         output_dir="batch_output",
         sample_rate=24000
     )
@@ -113,13 +113,13 @@ def example_4_advanced_processor_usage():
     processor = TTSProcessor(
         # model_repo_id="custom/model",  # Use custom model if needed
         # cache_dir="./custom_cache",    # Use custom cache directory
-        # prompts_file="./custom_prompts.json"  # Use custom prompts file
+        # reference_voices_file="./custom_reference_voices.json"  # Use custom referenceVoices file
     )
-    
-    # Load model and prompts
+
+    # Load model and referenceVoices
     processor.load_model()
-    processor.load_prompts()
-    
+    processor.load_reference_voices()
+
     # Test text chunking
     long_text = """
     This is a very long text that will be automatically chunked by the TTS system.
@@ -138,7 +138,7 @@ def example_4_advanced_processor_usage():
     # Process the long text
     result = processor.process_single_text(
         text=long_text.strip(),
-        prompt_key="hin_f_happy_00001",  # Change this to match your available prompts
+        reference_voice_key="hin_f_happy_00001",  # Change this to match your available referenceVoices
         output_path="output_long_text.wav",
         max_chunk_chars=300
     )
@@ -159,7 +159,7 @@ def example_5_base64_generation():
     # Generate audio without saving to file
     result = processor.process_single_text(
         text="This audio will be converted to base64 format.",
-        prompt_key="hin_f_happy_00001",  # Change this to match your available prompts
+        reference_voice_key="hin_f_happy_00001",  # Change this to match your available referenceVoices
         output_path=None,  # No file output
         sample_rate=24000
     )
@@ -202,8 +202,8 @@ def main():
     except Exception as e:
         print(f"\n❌ Error running examples: {e}")
         print("Make sure you have:")
-        print("1. Proper prompts.json file with valid prompt keys")
-        print("2. Corresponding audio files in the prompts directory")
+        print("1. Proper reference_voices.json file with valid referenceVoices keys")
+        print("2. Corresponding audio files in the referenceVoices directory")
         print("3. Required Python packages installed")
 
 

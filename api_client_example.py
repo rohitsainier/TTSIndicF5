@@ -3,7 +3,7 @@
 Example client script for TTS IndicF5 API
 Demonstrates how to use the REST API for single and batch TTS requests
 
-Note: This script expects the API server to be running with prompts configured in data/prompts/
+Note: This script expects the API server to be running with reference voices configured in data/reference_voices/
 """
 
 import requests
@@ -34,27 +34,27 @@ def test_health_check():
         print(response.text)
     print()
 
-def test_get_prompts():
-    """Test getting available prompts"""
-    print("=== Getting Available Prompts ===")
-    response = requests.get(f"{API_BASE_URL}/prompts")
+def test_get_reference_voices():
+    """Test getting available reference voices"""
+    print("=== Getting Available Reference Voices ===")
+    response = requests.get(f"{API_BASE_URL}/referenceVoices")
     if response.status_code == 200:
         data = response.json()
-        print(f"✓ Found {data['total_count']} prompts:")
-        for key, prompt in data['prompts'].items():
-            print(f"  - {key}: {prompt['author']}")
-        return list(data['prompts'].keys())
+        print(f"✓ Found {data['total_count']} reference voices:")
+        for key, voice in data['reference_voices'].items():
+            print(f"  - {key}: {voice['author']}")
+        return list(data['reference_voices'].keys())
     else:
-        print("✗ Failed to get prompts")
+        print("✗ Failed to get reference voices")
         print(response.text)
         return []
 
-def test_single_tts(prompt_keys):
+def test_single_tts(voice_keys):
     """Test single TTS request with chunking support"""
     print("=== Testing Single TTS Request (with Chunking) ===")
-    
-    if not prompt_keys:
-        print("No prompts available for testing")
+
+    if not voice_keys:
+        print("No voices available for testing")
         return
     
     # Test with a long text that will trigger chunking
@@ -67,19 +67,19 @@ def test_single_tts(prompt_keys):
     print(f"Text length: {len(long_text)} characters")
     print(f"Text preview: {long_text[:100]}...")
     print(f"Will be automatically chunked: {'Yes' if len(long_text) > 300 else 'No'}")
-    
-    # Use the first available prompt
-    prompt_key = prompt_keys[0]
-    
+
+    # Use the first available voice
+    voice_key = voice_keys[0]
+
     request_data = {
         "text": long_text,
-        "prompt_key": prompt_key,
+        "reference_voice_key": voice_key,
         "output_format": "wav",
         "sample_rate": 24000,
         "normalize": True
     }
-    
-    print(f"Sending request with prompt: {prompt_key}")
+
+    print(f"Sending request with voice: {voice_key}")
     response = requests.post(f"{API_BASE_URL}/tts", json=request_data)
     
     if response.status_code == 200:
@@ -102,15 +102,15 @@ def test_single_tts(prompt_keys):
         print(response.text)
     print()
 
-def test_batch_tts(prompt_keys):
+def test_batch_tts(reference_voices_keys):
     """Test batch TTS request"""
     print("=== Testing Batch TTS Request ===")
-    
-    if not prompt_keys:
-        print("No prompts available for testing")
+
+    if not reference_voices_keys:
+        print("No referenceVoices available for testing")
         return
     
-    # Create multiple requests with different texts and prompts
+    # Create multiple requests with different texts and referenceVoices
     texts = [
         "మొదటి వాక్యం - ఇది తెలుగు భాషలో ఉంది.",
         "दूसरा वाक्य - यह हिंदी में है।",
@@ -119,10 +119,10 @@ def test_batch_tts(prompt_keys):
     
     requests_list = []
     for i, text in enumerate(texts):
-        prompt_key = prompt_keys[i % len(prompt_keys)]  # Cycle through available prompts
+        voice_key = reference_voices_keys[i % len(reference_voices_keys)]  # Cycle through available referenceVoices
         requests_list.append({
             "text": text,
-            "prompt_key": prompt_key,
+            "reference_voice_key": voice_key,
             "output_format": "wav",
             "sample_rate": 24000,
             "normalize": True
@@ -158,25 +158,25 @@ def test_batch_tts(prompt_keys):
         print(response.text)
     print()
 
-def test_save_tts(prompt_keys):
+def test_save_tts(reference_voices_keys):
     """Test TTS with file saving on server"""
     print("=== Testing TTS with Server-side Save ===")
-    
-    if not prompt_keys:
-        print("No prompts available for testing")
+
+    if not reference_voices_keys:
+        print("No referenceVoices available for testing")
         return
-    
-    prompt_key = prompt_keys[0]
-    
+
+    voice_key = reference_voices_keys[0]
+
     request_data = {
         "text": "సర్వర్‌లో ఫైల్ సేవ్ చేయడం టెస్ట్ చేస్తున్నాము.",
-        "prompt_key": prompt_key,
+        "voice_key": voice_key,
         "output_format": "wav",
         "sample_rate": 24000,
         "normalize": True
     }
-    
-    print(f"Sending save request with prompt: {prompt_key}")
+
+    print(f"Sending save request with voice: {voice_key}")
     response = requests.post(f"{API_BASE_URL}/tts/save", json=request_data)
     
     if response.status_code == 200:
@@ -227,23 +227,23 @@ def main():
     
     # Test text chunking demo
     test_chunk_demo()
-    
-    # Get available prompts
-    prompt_keys = test_get_prompts()
-    
-    if not prompt_keys:
-        print("No prompts available. Cannot proceed with TTS tests.")
+
+    # Get available referenceVoices
+    reference_voices_keys = test_get_reference_voices()
+
+    if not reference_voices_keys:
+        print("No referenceVoices available. Cannot proceed with TTS tests.")
         return
     
     # Test single TTS (with chunking support)
-    test_single_tts(prompt_keys)
-    
+    test_single_tts(reference_voices_keys)
+
     # Test batch TTS
-    test_batch_tts(prompt_keys)
-    
+    test_batch_tts(reference_voices_keys)
+
     # Test server-side save
-    test_save_tts(prompt_keys)
-    
+    test_save_tts(reference_voices_keys)
+
     # Test chunk demo
     test_chunk_demo()
     

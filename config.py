@@ -30,8 +30,8 @@ AUDIO_CONFIG = {
 
 # File Paths
 PATHS = {
-    "prompts_file": os.getenv("PROMPTS_FILE", "./data/prompts/prompts.json"),
-    "prompts_dir": os.getenv("PROMPTS_DIR", "./data/prompts"),
+    "reference_voices_file": os.getenv("REFERENCE_VOICES_FILE", "./data/reference_voices/reference_voices.json"),
+    "reference_voices_dir": os.getenv("REFERENCE_VOICES_DIR", "./data/reference_voices"),
     "output_dir": os.getenv("OUTPUT_DIR", "./data/out"),
     "temp_dir": os.getenv("TEMP_DIR", "/tmp/tts_api"),
 }
@@ -88,14 +88,14 @@ def validate_config():
     """Validate configuration settings"""
     errors = []
     
-    # Check if prompts file exists
-    if not os.path.exists(PATHS["prompts_file"]):
-        errors.append(f"Prompts file not found: {PATHS['prompts_file']}")
-    
-    # Check if prompts directory exists
-    if not os.path.exists(PATHS["prompts_dir"]):
-        errors.append(f"Prompts directory not found: {PATHS['prompts_dir']}")
-    
+    # Check if referenceVoices file exists
+    if not os.path.exists(PATHS["reference_voices_file"]):
+        errors.append(f"Reference voices file not found: {PATHS['reference_voices_file']}")
+
+    # Check if referenceVoices directory exists
+    if not os.path.exists(PATHS["reference_voices_dir"]):
+        errors.append(f"Reference voices directory not found: {PATHS['reference_voices_dir']}")
+
     # Check if output directory is writable
     try:
         os.makedirs(PATHS["output_dir"], exist_ok=True)
