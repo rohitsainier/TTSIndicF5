@@ -74,7 +74,7 @@ if [ -d "prompts" ] && [ "$(ls -A prompts 2>/dev/null)" ]; then
             fi
         fi
     done
-    if [ -f "data/reference_voices/prompts.json" ]; then
+    if [ -f "data/reference_voices/prompts.json" ] && [ ! -f "data/reference_voices/reference_voices.json" ]; then
         mv data/reference_voices/prompts.json data/reference_voices/reference_voices.json 2>/dev/null || true
     fi
     echo "✅ Reference voices files copied (skipped existing files)"
