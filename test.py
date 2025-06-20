@@ -12,7 +12,7 @@ from datetime import datetime
 start_time = time()
 
 # Load INF5 from Hugging Face
-repo_id = "ai4bharat/IndicF5"
+repo_id = "hareeshbabu82/TeluguIndicF5"
 model = AutoModel.from_pretrained(repo_id, trust_remote_code=True)
 end_time = time()
 print(f"Model loaded in {end_time - start_time:.2f} seconds")

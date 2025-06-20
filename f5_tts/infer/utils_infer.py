@@ -236,7 +236,7 @@ def load_checkpoint(model, ckpt_path, device: str, dtype=None, use_ema=True):
 def load_model(
     model_cls,
     model_cfg,
-    # ckpt_path,
+    ckpt_path,
     mel_spec_type=mel_spec_type,
     vocab_file="",
     ode_method=ode_method,
@@ -249,7 +249,7 @@ def load_model(
 
     print("\nvocab : ", vocab_file)
     print("token : ", tokenizer)
-    # print("model : ", ckpt_path, "\n")
+    print("model : ", ckpt_path, "\n")
 
     vocab_char_map, vocab_size = get_tokenizer(vocab_file, tokenizer)
     model = CFM(
@@ -269,7 +269,9 @@ def load_model(
     ).to(device)
 
     dtype = torch.float32 if mel_spec_type == "bigvgan" else None
-    # model = load_checkpoint(model, ckpt_path, device, dtype=dtype, use_ema=use_ema)
+    
+    if ckpt_path and ckpt_path != "":
+        model = load_checkpoint(model, ckpt_path, device, dtype=dtype, use_ema=use_ema)
 
     return model
 

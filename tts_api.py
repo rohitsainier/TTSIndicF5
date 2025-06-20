@@ -355,7 +355,7 @@ async def root():
     return {
         "message": "TTS IndicF5 API Server",
         "version": "1.0.0",
-        "model": "ai4bharat/IndicF5",
+        "model": "hareeshbabu82/TeluguIndicF5",
         "web_interface": "/web",
         "api_docs": "/docs",
         "api_base": "/api"
@@ -385,7 +385,7 @@ async def api_root():
     return {
         "message": "TTS IndicF5 API",
         "version": "1.0.0",
-        "model": "ai4bharat/IndicF5",
+        "model": "hareeshbabu82/TeluguIndicF5",
         "endpoints": {
             "single_tts": "/api/tts",
             "batch_tts": "/api/tts/batch",
