@@ -1,0 +1,1435 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TTS IndicF5 - Chalkboard Interface</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'chalkboard': {
+              50: '#f0f7f0',
+              100: '#dceddc',
+              200: '#bddcbd',
+              300: '#92c592',
+              400: '#5fa85f',
+              500: '#3d8b3d',
+              600: '#2d6f2d',
+              700: '#245724',
+              800: '#1e451e',
+              900: '#0f2e0f',
+              950: '#051b05'
+            },
+            'chalk': {
+              100: '#f8fdf8',
+              200: '#e8f5e8',
+              300: '#d1ead1',
+              400: '#a3d5a3',
+              500: '#75c075',
+              600: '#4fa34f',
+              700: '#3d8b3d',
+              800: '#2d6f2d',
+              900: '#1e4a1e'
+            }
+          },
+          fontFamily: {
+            'chalk': [ 'Courier New', 'monospace' ]
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    .chalkboard-texture {
+      background-image:
+        radial-gradient(circle at 25px 25px, rgba(255, 255, 255, 0.1) 2%, transparent 50%),
+        radial-gradient(circle at 75px 75px, rgba(255, 255, 255, 0.1) 2%, transparent 50%);
+      background-size: 100px 100px;
+    }
+
+    .chalk-text {
+      text-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    }
+
+    .loading-spinner {
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .file-item:hover {
+      transform: translateY(-2px);
+      transition: all 0.2s ease;
+    }
+
+    .reference-voice-item {
+      transition: all 0.3s ease;
+    }
+
+    .reference-voice-item:hover {
+      transform: scale(1.02);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    /* Custom scrollbar for chalkboard theme */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #1e4a1e;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #4fa34f;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #75c075;
+    }
+  </style>
+</head>
+
+<body class="bg-chalkboard-950 chalkboard-texture min-h-screen font-chalk text-chalk-100">
+  <!-- Header -->
+  <header class="bg-chalkboard-900 border-b-2 border-chalk-600 shadow-lg">
+    <div class="container mx-auto px-4 py-6">
+      <div class="text-center">
+        <h1 class="text-4xl font-bold chalk-text text-chalk-100 mb-2">🎤 TTS IndicF5 Chalkboard</h1>
+        <p class="text-chalk-300 text-lg">Text-to-Speech for Indian Languages</p>
+        <div id="apiStatus" class="mt-4 p-3 rounded-lg inline-block">
+          <div class="flex items-center justify-center">
+            <div class="loading-spinner w-5 h-5 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
+            <span class="text-chalk-300">Checking API status...</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content - 3 Column Layout -->
+  <main class="container mx-auto px-4 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+
+      <!-- Left Column: Available Reference Voices -->
+      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-bold chalk-text text-chalk-100">🎭 Reference Voices</h2>
+          <button onclick="loadReferenceVoices()"
+            class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md transition-colors duration-200">
+            🔄
+          </button>
+        </div>
+
+        <!-- Upload New Reference Voice -->
+        <div class="mb-6 p-4 bg-chalkboard-800 rounded-lg border border-chalk-700">
+          <h3 class="text-lg font-semibold text-chalk-200 mb-3">📤 Upload New Reference Voice</h3>
+          <div class="space-y-3">
+            <input type="file" id="referenceVoiceFile" accept="audio/*"
+              class="w-full text-chalk-200 bg-chalkboard-700 border border-chalk-600 rounded-md p-2 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:bg-chalk-600 file:text-chalkboard-900 hover:file:bg-chalk-500">
+            <input type="text" id="referenceVoiceName" placeholder="Reference voice name..."
+              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none">
+            <input type="text" id="referenceVoiceAuthor" placeholder="Author name..."
+              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none">
+            <textarea id="referenceVoiceContent"
+              placeholder="Enter the reference text content (in any Indian language)..."
+              class="w-full h-24 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none"></textarea>
+            <button onclick="uploadReferenceVoices()"
+              class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-4 rounded-md font-semibold transition-colors duration-200">
+              Upload Reference Voice
+            </button>
+          </div>
+        </div>
+
+        <!-- Reference Voices List -->
+        <div id="referenceVoicesList" class="space-y-3 max-h-96 overflow-y-auto">
+          <div class="flex items-center justify-center py-8">
+            <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
+            <span class="text-chalk-300">Loading reference voices...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Column: Conversion Options -->
+      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+        <h2 class="text-2xl font-bold chalk-text text-chalk-100 mb-6">⚙️ Text-to-Speech</h2>
+
+        <!-- Single TTS Form -->
+        <form id="singleTTSForm" class="space-y-4">
+          <div>
+            <label for="singleText" class="block text-chalk-200 font-semibold mb-2">Text to Convert:</label>
+            <textarea id="singleText" placeholder="Enter text in any Indian language..." required
+              class="w-full h-32 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none">కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.</textarea>
+          </div>
+
+          <div>
+            <label for="singleReferenceVoice" class="block text-chalk-200 font-semibold mb-2">Reference Voice:</label>
+            <select id="singleReferenceVoice" required
+              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+              <option value="">Select a reference voice...</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="singleFormat" class="block text-chalk-200 font-semibold mb-2">Format:</label>
+              <select id="singleFormat"
+                class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+                <option value="wav">WAV</option>
+                <option value="mp3">MP3</option>
+              </select>
+            </div>
+            <div>
+              <label for="sampleRate" class="block text-chalk-200 font-semibold mb-2">Sample Rate:</label>
+              <select id="sampleRate"
+                class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+                <option value="24000">24kHz</option>
+                <option value="22050">22kHz</option>
+                <option value="16000">16kHz</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="flex items-center">
+            <input type="checkbox" id="normalize" checked
+              class="mr-2 w-4 h-4 text-chalk-600 bg-chalkboard-700 border-chalk-600 rounded focus:ring-chalk-500">
+            <label for="normalize" class="text-chalk-200">Normalize audio</label>
+          </div>
+
+          <button type="submit"
+            class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-3 px-6 rounded-md font-bold text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+            🚀 Generate Speech
+          </button>
+        </form>
+
+        <!-- Loading and Result -->
+        <div id="singleLoading" class="hidden mt-4 text-center py-4">
+          <div class="loading-spinner w-8 h-8 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
+          </div>
+          <span class="text-chalk-300">Generating speech...</span>
+
+          <!-- System Stats Display -->
+          <div id="systemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h4 class="text-sm font-semibold text-chalk-200 mb-3">📊 System Usage</h4>
+            <div class="grid grid-cols-2 gap-4 text-xs">
+              <!-- CPU Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">CPU:</span>
+                  <span id="cpuUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="cpuBar" class="bg-chalk-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
+                  </div>
+                </div>
+              </div>
+
+              <!-- Memory Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">Memory:</span>
+                  <span id="memoryUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="memoryBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300"
+                    style="width: 0%"></div>
+                </div>
+              </div>
+
+              <!-- GPU Usage -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">GPU:</span>
+                  <span id="gpuUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="gpuBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
+                  </div>
+                </div>
+              </div>
+
+              <!-- GPU Memory -->
+              <div class="space-y-2">
+                <div class="flex justify-between items-center">
+                  <span class="text-chalk-300">GPU Mem:</span>
+                  <span id="gpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                </div>
+                <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                  <div id="gpuMemoryBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300"
+                    style="width: 0%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="singleResult" class="hidden mt-4 p-4 rounded-lg"></div>
+
+        <!-- Batch Processing -->
+        <div class="mt-8 pt-6 border-t border-chalk-700">
+          <h3 class="text-xl font-bold text-chalk-100 mb-4">📦 Batch Processing</h3>
+          <div id="batchContainer" class="space-y-3 mb-4">
+            <!-- Batch items will be added here dynamically -->
+          </div>
+          <div class="flex gap-2">
+            <button onclick="addBatchItem()"
+              class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 py-2 px-4 rounded-md transition-colors duration-200">
+              ➕ Add Item
+            </button>
+            <button onclick="processBatch()"
+              class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-4 rounded-md font-semibold transition-colors duration-200">
+              🎯 Process Batch
+            </button>
+          </div>
+          <div id="batchLoading" class="hidden mt-4 text-center py-4">
+            <div
+              class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
+            </div>
+            <span class="text-chalk-300">Processing batch...</span>
+
+            <!-- System Stats Display for Batch -->
+            <div id="batchSystemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-3">
+              <h4 class="text-sm font-semibold text-chalk-200 mb-2">📊 System Usage</h4>
+              <div class="grid grid-cols-2 gap-3 text-xs">
+                <!-- CPU Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">CPU:</span>
+                    <span id="batchCpuUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchCpuBar" class="bg-chalk-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- Memory Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">Memory:</span>
+                    <span id="batchMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchMemoryBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- GPU Usage -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">GPU:</span>
+                    <span id="batchGpuUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchGpuBar" class="bg-green-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- GPU Memory -->
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center">
+                    <span class="text-chalk-300">GPU Mem:</span>
+                    <span id="batchGpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                  </div>
+                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                    <div id="batchGpuMemoryBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300"
+                      style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="batchResult" class="hidden mt-4"></div>
+        </div>
+      </div>
+
+      <!-- Right Column: Generated Files History -->
+      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-bold chalk-text text-chalk-100">📂 Generated Files</h2>
+          <button onclick="clearAllFiles()"
+            class="bg-red-600 hover:bg-red-500 text-white px-3 py-1 rounded-md transition-colors duration-200">
+            🗑️ Clear
+          </button>
+        </div>
+
+        <!-- History List -->
+        <div id="historyList" class="space-y-3 max-h-[500px] overflow-y-auto">
+          <div class="text-center py-8 text-chalk-400">
+            No generated files yet. Create some audio to see them here!
+          </div>
+        </div>
+
+        <!-- Storage Info -->
+        <div class="mt-6 pt-4 border-t border-chalk-700">
+          <div class="text-sm text-chalk-400">
+            <div class="flex justify-between">
+              <span>Total Files:</span>
+              <span id="totalFiles">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Storage Used:</span>
+              <span id="storageUsed">0 MB</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Metadata Statistics -->
+        <div class="mt-4 pt-4 border-t border-chalk-700">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-chalk-300">📋 Metadata Status</h3>
+            <button onclick="refreshMetadataStats()" class="text-chalk-400 hover:text-chalk-300 text-xs"
+              title="Refresh metadata statistics">
+              🔄
+            </button>
+          </div>
+          <div class="text-xs text-chalk-400">
+            <div class="flex justify-between">
+              <span>Files with metadata:</span>
+              <span id="filesWithMetadata">0</span>
+            </div>
+            <div class="flex justify-between">
+              <span>Missing metadata:</span>
+              <span id="filesMissingMetadata">0</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metadata Management Section -->
+    <div class="mt-8 bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-bold text-chalk-100">🏷️ Metadata Management</h2>
+        <button onclick="toggleMetadataSection()" id="metadataToggle"
+          class="text-chalk-400 hover:text-chalk-300 text-sm">
+          ▼ Show Tools
+        </button>
+      </div>
+
+      <div id="metadataTools" class="hidden space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <!-- Metadata Actions -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">🔧 Bulk Actions</h3>
+            <div class="space-y-2">
+              <button onclick="exportMetadata()"
+                class="w-full bg-chalk-700 hover:bg-chalk-600 text-chalk-100 py-2 px-3 rounded text-sm">
+                📤 Export Metadata (JSON)
+              </button>
+              <button onclick="clearAllMetadata()"
+                class="w-full bg-red-600 hover:bg-red-500 text-white py-2 px-3 rounded text-sm">
+                🗑️ Clear All Metadata
+              </button>
+            </div>
+          </div>
+
+          <!-- Metadata Statistics -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">📊 Statistics</h3>
+            <div class="text-xs text-chalk-400 space-y-1">
+              <div class="flex justify-between">
+                <span>Total Files:</span>
+                <span id="metadataStatsTotal">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span>With Metadata:</span>
+                <span id="metadataStatsWithMeta">0</span>
+              </div>
+              <div class="flex justify-between">
+                <span>Missing Metadata:</span>
+                <span id="metadataStatsMissing">0</span>
+              </div>
+              <div class="flex justify-between border-t border-chalk-700 pt-1">
+                <span>Coverage:</span>
+                <span id="metadataCoverage">0%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+            <h3 class="font-semibold text-chalk-200 mb-3">⚡ Quick Actions</h3>
+            <div class="space-y-2">
+              <button onclick="showFilesWithoutMetadata()"
+                class="w-full bg-yellow-600 hover:bg-yellow-500 text-white py-2 px-3 rounded text-sm">
+                📋 Show Files Missing Metadata
+              </button>
+              <button onclick="refreshAllData()"
+                class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-3 rounded text-sm">
+                🔄 Refresh All Data
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>    const API_BASE = 'http://localhost:8000/api';
+    let availableReferenceVoices = {};
+
+    // Initialize the page
+    document.addEventListener( 'DOMContentLoaded', function () {
+      checkHealth();
+      loadReferenceVoices();
+      loadGeneratedFiles();
+      addBatchItem(); // Add initial batch item
+
+      // Setup single TTS form
+      document.getElementById( 'singleTTSForm' ).addEventListener( 'submit', function ( e ) {
+        e.preventDefault();
+        generateSingleTTS();
+      } );
+    } );
+
+    async function checkHealth() {
+      const statusDiv = document.getElementById( 'apiStatus' );
+
+      try {
+        const response = await fetch( `${API_BASE}/health` );
+        const data = await response.json();
+
+        if ( response.ok && data.status === 'healthy' ) {
+          statusDiv.className = 'p-3 rounded-lg inline-block bg-green-800 border border-green-600';
+          statusDiv.innerHTML = `
+            <div class="flex items-center text-green-200">
+              <span class="mr-2">✅</span>
+              <span>API is healthy - Model: ${data.model_loaded ? '✅' : '❌'} - Voices: ${data.available_reference_voices}</span>
+            </div>
+          `;
+        } else {
+          statusDiv.className = 'p-3 rounded-lg inline-block bg-red-800 border border-red-600';
+          statusDiv.innerHTML = `
+            <div class="flex items-center text-red-200">
+              <span class="mr-2">❌</span>
+              <span>API is not responding properly</span>
+            </div>
+          `;
+        }
+      } catch ( error ) {
+        statusDiv.className = 'p-3 rounded-lg inline-block bg-red-800 border border-red-600';
+        statusDiv.innerHTML = `
+          <div class="flex items-center text-red-200">
+            <span class="mr-2">❌</span>
+            <span>Cannot connect to API. Make sure server is running on port 8000</span>
+          </div>
+        `;
+      }
+    }
+
+    async function loadReferenceVoices() {
+      const referenceVoicesDiv = document.getElementById( 'referenceVoicesList' );
+
+      referenceVoicesDiv.innerHTML = `
+        <div class="flex items-center justify-center py-8">
+          <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
+          <span class="text-chalk-300">Loading voices...</span>
+        </div>
+      `;
+
+      try {
+        const response = await fetch( `${API_BASE}/referenceVoices` );
+        const data = await response.json();
+
+        availableReferenceVoices = data.reference_voices;
+
+        // Update referenceVoices display
+        let referenceVoicesHtml = '';
+        for ( const [ key, referenceVoices ] of Object.entries( data.reference_voices ) ) {
+          referenceVoicesHtml += `
+            <div class="referenceVoices-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-chalk-100">${key}</h4>
+                <button onclick="deleteReferenceVoices('${key}')" class="text-red-400 hover:text-red-300 text-sm">
+                  🗑️
+                </button>
+              </div>
+              <p class="text-chalk-300 text-sm mb-2">by ${referenceVoices.author}</p>
+              <p class="text-chalk-400 text-xs mb-3">${referenceVoices.content.substring( 0, 80 )}...</p>
+              <audio controls class="w-full h-8" style="filter: hue-rotate(90deg);">
+                <source src="${API_BASE}/referenceVoices/${key}/audio" type="audio/wav">
+              </audio>
+            </div>
+          `;
+        }
+
+        referenceVoicesDiv.innerHTML = referenceVoicesHtml || '<div class="text-center text-chalk-400 py-8">No voices available</div>';
+
+        // Update select options
+        updateReferenceVoicesSelects();
+
+      } catch ( error ) {
+        referenceVoicesDiv.innerHTML = '<div class="text-center text-red-400 py-8">❌ Failed to load voices</div>';
+      }
+    }
+
+    function updateReferenceVoicesSelects() {
+      const selects = document.querySelectorAll( '#singleReferenceVoice, .batch-reference-voice' );
+      selects.forEach( select => {
+        const currentValue = select.value;
+        select.innerHTML = '<option value="">Select a reference voice...</option>';
+
+        for ( const [ key, referenceVoices ] of Object.entries( availableReferenceVoices ) ) {
+          const option = document.createElement( 'option' );
+          option.value = key;
+          option.textContent = `${key} - ${referenceVoices.author}`;
+          select.appendChild( option );
+        }
+
+        if ( currentValue && availableReferenceVoices[ currentValue ] ) {
+          select.value = currentValue;
+        }
+      } );
+    }
+
+    async function uploadReferenceVoices() {
+      const fileInput = document.getElementById( 'referenceVoiceFile' );
+      const nameInput = document.getElementById( 'referenceVoiceName' );
+      const authorInput = document.getElementById( 'referenceVoiceAuthor' );
+      const contentInput = document.getElementById( 'referenceVoiceContent' );
+
+      if ( !fileInput.files[ 0 ] || !nameInput.value || !authorInput.value || !contentInput.value ) {
+        alert( 'Please fill all fields and select an audio file' );
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append( 'file', fileInput.files[ 0 ] );
+      formData.append( 'name', nameInput.value );
+      formData.append( 'author', authorInput.value );
+      formData.append( 'content', contentInput.value );
+
+      try {
+        const response = await fetch( `${API_BASE}/referenceVoices/upload`, {
+          method: 'POST',
+          body: formData
+        } );
+
+        const data = await response.json();
+        if ( response.ok && data.success ) {
+          alert( data.message );
+          fileInput.value = '';
+          nameInput.value = '';
+          authorInput.value = '';
+          contentInput.value = '';
+          loadReferenceVoices();
+        } else {
+          alert( `Failed to upload referenceVoice: ${data.detail || 'Unknown error'}` );
+        }
+      } catch ( error ) {
+        alert( 'Error uploading referenceVoice: ' + error.message );
+      }
+    }
+
+    async function deleteReferenceVoice( referenceVoiceKey ) {
+      if ( !confirm( `Are you sure you want to delete "${referenceVoiceKey}"?` ) ) return;
+
+      try {
+        const response = await fetch( `${API_BASE}/referenceVoices/${referenceVoiceKey}`, {
+          method: 'DELETE'
+        } );
+
+        const data = await response.json();
+        if ( response.ok && data.success ) {
+          alert( data.message );
+          loadReferenceVoices();
+        } else {
+          alert( `Failed to delete referenceVoice: ${data.detail || 'Unknown error'}` );
+        }
+      } catch ( error ) {
+        alert( 'Error deleting referenceVoice: ' + error.message );
+      }
+    }
+
+    async function generateSingleTTS() {
+      const text = document.getElementById( 'singleText' ).value;
+      const referenceVoiceKey = document.getElementById( 'singleReferenceVoice' ).value;
+      const format = document.getElementById( 'singleFormat' ).value;
+      const sampleRate = parseInt( document.getElementById( 'sampleRate' ).value );
+      const normalize = document.getElementById( 'normalize' ).checked;
+
+      const resultDiv = document.getElementById( 'singleResult' );
+      const loadingDiv = document.getElementById( 'singleLoading' );
+      const submitBtn = document.querySelector( '#singleTTSForm button[type="submit"]' );
+
+      resultDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+      submitBtn.disabled = true;
+
+      // Start system monitoring
+      startSystemMonitoring();
+
+      try {
+        const response = await fetch( `${API_BASE}/tts`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify( {
+            text: text,
+            reference_voice_key: referenceVoiceKey,
+            output_format: format,
+            sample_rate: sampleRate,
+            normalize: normalize
+          } )
+        } );
+
+        const data = await response.json();
+
+        // Stop system monitoring
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+        submitBtn.disabled = false;
+
+        if ( response.ok && data.success ) {
+          resultDiv.className = 'block mt-4 p-4 rounded-lg bg-green-800 border border-green-600';
+          resultDiv.innerHTML = `
+            <div class="text-green-200">
+              <div class="flex items-center mb-2">
+                <span class="mr-2">✅</span>
+                <span class="font-semibold">Speech generated successfully!</span>
+              </div>
+              <div class="text-sm space-y-1">
+                <div>Duration: ${data.duration.toFixed( 2 )} seconds</div>
+                <div>Filename: ${data.filename}</div>
+                <div>File saved to server output directory</div>
+              </div>
+              <audio controls class="w-full mt-3 h-8" style="filter: hue-rotate(90deg);">
+                <source src="data:audio/${format};base64,${data.audio_base64}" type="audio/${format}">
+                Your browser does not support the audio element.
+              </audio>
+              <div class="mt-3 flex gap-2">
+                <button onclick="downloadFileFromServer('${data.filename}')" 
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md text-sm">
+                  📥 Download
+                </button>
+              </div>
+            </div>
+          `;
+          resultDiv.style.display = 'block';
+          loadGeneratedFiles();
+        } else {
+          resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+          resultDiv.innerHTML = `
+            <div class="text-red-200">
+              <span class="mr-2">❌</span>
+              <span>Error: ${data.detail || data.message || 'Unknown error'}</span>
+            </div>
+          `;
+          resultDiv.style.display = 'block';
+        }
+
+      } catch ( error ) {
+        // Stop system monitoring on error
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+        submitBtn.disabled = false;
+        resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+        resultDiv.innerHTML = `
+          <div class="text-red-200">
+            <span class="mr-2">❌</span>
+            <span>Network error: ${error.message}</span>
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    function addBatchItem() {
+      const container = document.getElementById( 'batchContainer' );
+      const itemCount = container.children.length;
+
+      const newItem = document.createElement( 'div' );
+      newItem.className = 'batch-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-3';
+      newItem.innerHTML = `
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-chalk-200 font-semibold">Item ${itemCount + 1}</span>
+          <button type="button" onclick="removeBatchItem(this)" class="text-red-400 hover:text-red-300 text-sm">
+            ❌ Remove
+          </button>
+        </div>
+        <div class="space-y-2">
+          <textarea class="batch-text w-full h-20 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none" placeholder="Enter text..."></textarea>
+          <select class="batch-reference-voice w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm focus:border-chalk-500 focus:outline-none">
+            <option value="">Select a reference voice...</option>
+          </select>
+        </div>
+      `;
+      container.appendChild( newItem );
+      updateReferenceVoicesSelects();
+    }
+
+    function removeBatchItem( button ) {
+      const items = document.querySelectorAll( '.batch-item' );
+      if ( items.length > 1 ) {
+        button.closest( '.batch-item' ).remove();
+      }
+    }
+
+    async function processBatch() {
+      const batchItems = document.querySelectorAll( '.batch-item' );
+      const requests = [];
+
+      for ( const item of batchItems ) {
+        const text = item.querySelector( '.batch-text' ).value;
+        const referenceVoiceKey = item.querySelector( '.batch-reference-voice' ).value;
+
+        if ( text && referenceVoiceKey ) {
+          requests.push( {
+            text: text,
+            reference_voice_key: referenceVoiceKey,
+            output_format: 'wav',
+            sample_rate: 24000,
+            normalize: true
+          } );
+        }
+      }
+
+      if ( requests.length === 0 ) {
+        alert( 'Please add at least one valid request' );
+        return;
+      }
+
+      const resultDiv = document.getElementById( 'batchResult' );
+      const loadingDiv = document.getElementById( 'batchLoading' );
+
+      resultDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+
+      // Start system monitoring for batch processing
+      startSystemMonitoring( 'batch' );
+
+      try {
+        const response = await fetch( `${API_BASE}/tts/batch`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify( {
+            requests: requests,
+            return_as_zip: false
+          } )
+        } );
+
+        const data = await response.json();
+
+        // Stop system monitoring
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+
+        if ( response.ok ) {
+          let resultHtml = `
+            <div class="bg-chalkboard-800 border border-chalk-600 rounded-lg p-4">
+              <h4 class="font-semibold text-chalk-100 mb-3">📊 Batch Results</h4>
+              <div class="grid grid-cols-2 gap-4 text-sm text-chalk-300 mb-4">
+                <div>Total: ${data.total_requests}</div>
+                <div>Successful: ${data.successful_requests}</div>
+                <div>Failed: ${data.failed_requests}</div>
+                <div>Duration: ${data.total_duration.toFixed( 2 )}s</div>
+              </div>
+              <div class="space-y-3">
+          `;
+
+          data.results.forEach( ( result, index ) => {
+            if ( result.success ) {
+              resultHtml += `
+                <div class="bg-green-800 border border-green-600 rounded-md p-3">
+                  <div class="text-green-200">
+                    <strong>Item ${index + 1}:</strong> ✅ Success
+                    <div class="text-xs mt-1">File: ${result.filename}</div>
+                    <audio controls class="w-full mt-2 h-8" style="filter: hue-rotate(90deg);">
+                      <source src="data:audio/wav;base64,${result.audio_base64}" type="audio/wav">
+                      Your browser does not support the audio element.
+                    </audio>
+                    <button onclick="downloadFileFromServer('${result.filename}')" 
+                      class="mt-2 bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-2 py-1 rounded text-xs">
+                      📥 Download
+                    </button>
+                  </div>
+                </div>
+              `;
+            } else {
+              resultHtml += `
+                <div class="bg-red-800 border border-red-600 rounded-md p-3">
+                  <div class="text-red-200">
+                    <strong>Item ${index + 1}:</strong> ❌ Failed<br>
+                    <small>${result.message}</small>
+                  </div>
+                </div>
+              `;
+            }
+          } );
+
+          resultHtml += '</div></div>';
+
+          loadGeneratedFiles();
+
+          resultDiv.className = 'block mt-4';
+          resultDiv.innerHTML = resultHtml;
+          resultDiv.style.display = 'block';
+        } else {
+          resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+          resultDiv.innerHTML = `
+            <div class="text-red-200">
+              <span class="mr-2">❌</span>
+              <span>Batch processing failed: ${data.detail || 'Unknown error'}</span>
+            </div>
+          `;
+          resultDiv.style.display = 'block';
+        }
+
+      } catch ( error ) {
+        // Stop system monitoring on error
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+        resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+        resultDiv.innerHTML = `
+          <div class="text-red-200">
+            <span class="mr-2">❌</span>
+            <span>Network error: ${error.message}</span>
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+      }
+    }
+
+    async function loadGeneratedFiles() {
+      const historyDiv = document.getElementById( 'historyList' );
+
+      try {
+        // Get both files and metadata information
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && filesData.files.length > 0 ) {
+          // Create a map of metadata by filename for easy lookup
+          const metadataMap = {};
+          if ( metadataResponse.ok && metadataData.data ) {
+            metadataData.data.forEach( metadata => {
+              metadataMap[ metadata.filename ] = metadata;
+            } );
+          }
+
+          let historyHtml = '';
+          filesData.files.forEach( file => {
+            const fileDate = new Date( file.created_time ).toLocaleString();
+            const fileSizeKB = Math.round( file.size / 1024 );
+            const metadata = metadataMap[ file.filename ];
+
+            // Prepare display text for the original input
+            let textPreview = '';
+            let referenceVoiceInfo = '';
+
+            if ( metadata ) {
+              referenceVoiceInfo = `<div><strong>Reference Voice:</strong> ${metadata.reference_voice_key}</div>`;
+
+              // Truncate long text with ellipsis
+              if ( metadata.text_input && metadata.text_input.length > 0 ) {
+                const maxLength = 100;
+                textPreview = metadata.text_input.length > maxLength
+                  ? metadata.text_input.substring( 0, maxLength ) + '...'
+                  : metadata.text_input;
+                textPreview = `<div class="mt-2 p-2 bg-chalkboard-950 rounded border border-chalk-800">
+                  <div class="text-chalk-400 text-xs mb-1"><strong>Original Text:</strong></div>
+                  <div class="text-chalk-300 text-xs break-words" title="${metadata.text_input.replace( /"/g, '&quot;' )}">${textPreview}</div>
+                </div>`;
+              }
+            }
+
+            historyHtml += `
+              <div class="file-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
+                <div class="flex items-center justify-between mb-2">
+                  <h4 class="font-semibold text-chalk-100 text-sm">${file.filename}</h4>
+                  <div class="flex gap-2">
+                    ${metadata ? `<button onclick="editFileMetadata('${file.filename}')" class="text-chalk-400 hover:text-chalk-300 text-sm" title="Edit metadata">
+                      ✏️
+                    </button>` : `<button onclick="createFileMetadata('${file.filename}')" class="text-yellow-400 hover:text-yellow-300 text-sm" title="Add metadata">
+                      ➕
+                    </button>`}
+                    <button onclick="deleteFileFromServer('${file.filename}')" class="text-red-400 hover:text-red-300 text-sm" title="Delete file">
+                      🗑️
+                    </button>
+                  </div>
+                </div>
+                <div class="text-chalk-300 text-xs space-y-1 mb-3">
+                  <div><strong>Format:</strong> ${file.format.toUpperCase()}</div>
+                  <div><strong>Size:</strong> ${fileSizeKB}KB</div>
+                  <div><strong>Created:</strong> ${fileDate}</div>
+                  ${referenceVoiceInfo}
+                </div>
+                ${textPreview}
+                <audio controls class="w-full h-8 mb-3 mt-3" style="filter: hue-rotate(90deg);">
+                  <source src="${API_BASE}/files/${file.filename}" type="audio/${file.format}">
+                  Your browser does not support the audio element.
+                </audio>
+                <div class="flex gap-2">
+                  <button onclick="downloadFileFromServer('${file.filename}')" 
+                    class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-3 py-1 rounded text-xs">
+                    📥 Download
+                  </button>
+                  ${metadata ? `<button onclick="viewFullMetadata('${file.filename}')" 
+                    class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded text-xs">
+                    📋 Details
+                  </button>` : ''}
+                </div>
+              </div>
+            `;
+          } );
+          historyDiv.innerHTML = historyHtml;
+        } else {
+          historyDiv.innerHTML = '<div class="text-center py-8 text-chalk-400">No generated files yet. Create some audio to see them here!</div>';
+        }
+
+        updateStorageInfo( filesData.total_count, filesData.total_size );
+
+        // Update metadata statistics
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files.length;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          updateMetadataStats( filesWithMetadata, filesMissingMetadata );
+        }
+
+      } catch ( error ) {
+        console.error( 'Failed to load generated files:', error );
+        historyDiv.innerHTML = '<div class="text-center py-8 text-red-400">Failed to load files. Please try again.</div>';
+      }
+    }
+
+    async function deleteFileFromServer( filename ) {
+      if ( !confirm( `Are you sure you want to delete "${filename}"?` ) ) return;
+
+      try {
+        const response = await fetch( `${API_BASE}/files/${filename}`, {
+          method: 'DELETE'
+        } );
+
+        if ( response.ok ) {
+          loadGeneratedFiles();
+        } else {
+          alert( 'Failed to delete file' );
+        }
+      } catch ( error ) {
+        alert( 'Error deleting file: ' + error.message );
+      }
+    }
+
+    async function downloadFileFromServer( filename ) {
+      try {
+        const response = await fetch( `${API_BASE}/files/${filename}` );
+        if ( response.ok ) {
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL( blob );
+          const a = document.createElement( 'a' );
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild( a );
+          a.click();
+          window.URL.revokeObjectURL( url );
+          document.body.removeChild( a );
+        } else {
+          alert( 'Failed to download file' );
+        }
+      } catch ( error ) {
+        alert( 'Error downloading file: ' + error.message );
+      }
+    }
+
+    async function clearAllFiles() {
+      if ( !confirm( 'Are you sure you want to delete ALL generated files? This action cannot be undone.' ) ) return;
+
+      try {
+        const response = await fetch( `${API_BASE}/files`, {
+          method: 'DELETE'
+        } );
+
+        const data = await response.json();
+        if ( response.ok ) {
+          alert( data.message );
+          loadGeneratedFiles();
+        } else {
+          alert( 'Failed to clear files' );
+        }
+      } catch ( error ) {
+        alert( 'Error clearing files: ' + error.message );
+      }
+    }
+
+    function updateStorageInfo( totalFiles = 0, totalSize = 0 ) {
+      document.getElementById( 'totalFiles' ).textContent = totalFiles;
+      document.getElementById( 'storageUsed' ).textContent = ( totalSize / 1024 / 1024 ).toFixed( 2 ) + ' MB';
+    }
+
+    function updateMetadataStats( filesWithMetadata = 0, filesMissingMetadata = 0 ) {
+      document.getElementById( 'filesWithMetadata' ).textContent = filesWithMetadata;
+      document.getElementById( 'filesMissingMetadata' ).textContent = filesMissingMetadata;
+    }
+
+    async function refreshMetadataStats() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files ? filesData.files.length : 0;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          updateMetadataStats( filesWithMetadata, filesMissingMetadata );
+        }
+      } catch ( error ) {
+        console.error( 'Failed to refresh metadata stats:', error );
+      }
+    }
+
+    // Close modals when ESC key is pressed
+    document.addEventListener( 'keydown', function ( event ) {
+      if ( event.key === 'Escape' ) {
+        closeModal();
+        closeEditModal();
+        closeCreateModal();
+      }
+    } );
+
+    // Metadata Management Functions
+    function toggleMetadataSection() {
+      const section = document.getElementById( 'metadataTools' );
+      const toggle = document.getElementById( 'metadataToggle' );
+
+      if ( section.classList.contains( 'hidden' ) ) {
+        section.classList.remove( 'hidden' );
+        toggle.textContent = '▲ Hide Tools';
+        updateMetadataToolsStats();
+      } else {
+        section.classList.add( 'hidden' );
+        toggle.textContent = '▼ Show Tools';
+      }
+    }
+
+    async function updateMetadataToolsStats() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          const totalFiles = filesData.files ? filesData.files.length : 0;
+          const filesWithMetadata = metadataData.data ? metadataData.data.length : 0;
+          const filesMissingMetadata = totalFiles - filesWithMetadata;
+          const coverage = totalFiles > 0 ? Math.round( ( filesWithMetadata / totalFiles ) * 100 ) : 0;
+
+          document.getElementById( 'metadataStatsTotal' ).textContent = totalFiles;
+          document.getElementById( 'metadataStatsWithMeta' ).textContent = filesWithMetadata;
+          document.getElementById( 'metadataStatsMissing' ).textContent = filesMissingMetadata;
+          document.getElementById( 'metadataCoverage' ).textContent = coverage + '%';
+        }
+      } catch ( error ) {
+        console.error( 'Failed to update metadata tools stats:', error );
+      }
+    }
+
+    async function exportMetadata() {
+      try {
+        const response = await fetch( `${API_BASE}/files/metadata` );
+        const data = await response.json();
+
+        if ( response.ok && data.success ) {
+          const metadataJson = JSON.stringify( data.data, null, 2 );
+          const blob = new Blob( [ metadataJson ], { type: 'application/json' } );
+          const url = window.URL.createObjectURL( blob );
+          const a = document.createElement( 'a' );
+          a.href = url;
+          a.download = `files_metadata_export_${new Date().toISOString().split( 'T' )[ 0 ]}.json`;
+          document.body.appendChild( a );
+          a.click();
+          window.URL.revokeObjectURL( url );
+          document.body.removeChild( a );
+          alert( 'Metadata exported successfully!' );
+        } else {
+          alert( 'Failed to export metadata' );
+        }
+      } catch ( error ) {
+        alert( 'Error exporting metadata: ' + error.message );
+      }
+    }
+
+    async function clearAllMetadata() {
+      if ( !confirm( 'Are you sure you want to delete ALL file metadata? This action cannot be undone. The audio files will remain intact.' ) ) {
+        return;
+      }
+
+      try {
+        const response = await fetch( `${API_BASE}/files/metadata`, {
+          method: 'DELETE'
+        } );
+
+        const data = await response.json();
+        if ( response.ok && data.success ) {
+          alert( data.message );
+          loadGeneratedFiles();
+          updateMetadataToolsStats();
+        } else {
+          alert( 'Failed to clear metadata: ' + ( data.message || 'Unknown error' ) );
+        }
+      } catch ( error ) {
+        alert( 'Error clearing metadata: ' + error.message );
+      }
+    }
+
+    async function showFilesWithoutMetadata() {
+      try {
+        const [ filesResponse, metadataResponse ] = await Promise.all( [
+          fetch( `${API_BASE}/files` ),
+          fetch( `${API_BASE}/files/metadata` )
+        ] );
+
+        const filesData = await filesResponse.json();
+        const metadataData = await metadataResponse.json();
+
+        if ( filesResponse.ok && metadataResponse.ok ) {
+          // Create a set of filenames that have metadata
+          const metadataFilenames = new Set();
+          if ( metadataData.data ) {
+            metadataData.data.forEach( metadata => {
+              metadataFilenames.add( metadata.filename );
+            } );
+          }
+
+          // Find files without metadata
+          const filesWithoutMetadata = filesData.files.filter( file =>
+            !metadataFilenames.has( file.filename )
+          );
+
+          if ( filesWithoutMetadata.length === 0 ) {
+            alert( 'All files have metadata!' );
+            return;
+          }
+
+          // Create modal to show files without metadata
+          let filesList = '';
+          filesWithoutMetadata.forEach( file => {
+            filesList += `
+              <div class="flex items-center justify-between p-2 bg-chalkboard-800 rounded border border-chalk-700 mb-2">
+                <span class="text-chalk-100 text-sm">${file.filename}</span>
+                <button onclick="createFileMetadata('${file.filename}'); closeFilesWithoutMetadataModal();" 
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-2 py-1 rounded text-xs">
+                  ➕ Add Metadata
+                </button>
+              </div>
+            `;
+          } );
+
+          const modalHtml = `
+            <div id="filesWithoutMetadataModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="closeFilesWithoutMetadataModal()">
+              <div class="bg-chalkboard-800 border-2 border-chalk-600 rounded-lg p-6 max-w-2xl max-h-96 overflow-y-auto m-4" onclick="event.stopPropagation()">
+                <div class="flex justify-between items-center mb-4">
+                  <h3 class="text-xl font-bold text-chalk-100">📋 Files Missing Metadata (${filesWithoutMetadata.length})</h3>
+                  <button onclick="closeFilesWithoutMetadataModal()" class="text-chalk-400 hover:text-chalk-300 text-xl">✕</button>
+                </div>
+                <div class="max-h-64 overflow-y-auto">
+                  ${filesList}
+                </div>
+                <div class="mt-4 flex gap-2">
+                  <button onclick="closeFilesWithoutMetadataModal()" class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-4 py-2 rounded text-sm">
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          `;
+
+          document.body.insertAdjacentHTML( 'beforeend', modalHtml );
+        }
+      } catch ( error ) {
+        alert( 'Error loading files without metadata: ' + error.message );
+      }
+    }
+
+    function closeFilesWithoutMetadataModal() {
+      const modal = document.getElementById( 'filesWithoutMetadataModal' );
+      if ( modal ) {
+        modal.remove();
+      }
+    }
+
+    async function refreshAllData() {
+      try {
+        await loadGeneratedFiles();
+        await updateMetadataToolsStats();
+        alert( 'All data refreshed successfully!' );
+      } catch ( error ) {
+        alert( 'Error refreshing data: ' + error.message );
+      }
+    }
+
+    // System monitoring variables
+    let systemMonitorInterval = null;
+
+    // System monitoring functions
+    async function fetchSystemStats() {
+      try {
+        const response = await fetch( `${API_BASE}/system/monitor` );
+        const data = await response.json();
+
+        if ( response.ok && data.success ) {
+          return data;
+        }
+        return null;
+      } catch ( error ) {
+        console.error( 'Failed to fetch system stats:', error );
+        return null;
+      }
+    }
+
+    function updateSystemStatsDisplay( stats, prefix = '' ) {
+      if ( !stats ) return;
+
+      // Debug: Log the stats to console
+      console.log( 'System stats:', stats );
+
+      // Update CPU usage
+      const cpuUsageEl = document.getElementById( `${prefix}cpuUsage` );
+      const cpuBarEl = document.getElementById( `${prefix}cpuBar` );
+      if ( cpuUsageEl && cpuBarEl ) {
+        cpuUsageEl.textContent = `${stats.cpu_usage.toFixed( 1 )}%`;
+        cpuBarEl.style.width = `${stats.cpu_usage}%`;
+
+        // Update bar color based on usage
+        if ( stats.cpu_usage > 80 ) {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+        } else if ( stats.cpu_usage > 60 ) {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        } else {
+          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-chalk-500' );
+        }
+      }
+
+      // Update Memory usage
+      const memoryUsageEl = document.getElementById( `${prefix}memoryUsage` );
+      const memoryBarEl = document.getElementById( `${prefix}memoryBar` );
+      if ( memoryUsageEl && memoryBarEl ) {
+        memoryUsageEl.textContent = `${stats.memory_usage.toFixed( 1 )}%`;
+        memoryBarEl.style.width = `${stats.memory_usage}%`;
+
+        // Update bar color based on usage
+        if ( stats.memory_usage > 80 ) {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+        } else if ( stats.memory_usage > 60 ) {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        } else {
+          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-blue-500' );
+        }
+      }
+
+      // Update GPU usage
+      const gpuUsageEl = document.getElementById( `${prefix}gpuUsage` );
+      const gpuBarEl = document.getElementById( `${prefix}gpuBar` );
+      if ( gpuUsageEl && gpuBarEl ) {
+        if ( stats.gpu_usage !== undefined && stats.gpu_usage !== null ) {
+          gpuUsageEl.textContent = `${stats.gpu_usage.toFixed( 1 )}%`;
+          gpuBarEl.style.width = `${stats.gpu_usage}%`;
+
+          // Update bar color based on usage
+          if ( stats.gpu_usage > 80 ) {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+          } else if ( stats.gpu_usage > 60 ) {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          } else {
+            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-green-500' );
+          }
+        } else {
+          gpuUsageEl.textContent = 'N/A';
+          gpuBarEl.style.width = '0%';
+        }
+      }
+
+      // Update GPU Memory usage
+      const gpuMemoryUsageEl = document.getElementById( `${prefix}gpuMemoryUsage` );
+      const gpuMemoryBarEl = document.getElementById( `${prefix}gpuMemoryBar` );
+      if ( gpuMemoryUsageEl && gpuMemoryBarEl ) {
+        if ( stats.gpu_memory_total !== undefined && stats.gpu_memory_total !== null && stats.gpu_memory_total > 0 ) {
+          const gpuMemoryPercent = ( stats.gpu_memory_used / stats.gpu_memory_total ) * 100;
+          gpuMemoryUsageEl.textContent = `${gpuMemoryPercent.toFixed( 1 )}%`;
+          gpuMemoryBarEl.style.width = `${gpuMemoryPercent}%`;
+
+          // Update bar color based on usage
+          if ( gpuMemoryPercent > 80 ) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
+          } else if ( gpuMemoryPercent > 60 ) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          } else {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-purple-500' );
+          }
+        } else {
+          gpuMemoryUsageEl.textContent = 'N/A';
+          gpuMemoryBarEl.style.width = '0%';
+        }
+      }
+    }
+
+    function startSystemMonitoring( prefix = '' ) {
+      console.log( 'Starting system monitoring with prefix:', prefix );
+
+      if ( systemMonitorInterval ) {
+        clearInterval( systemMonitorInterval );
+      }
+
+      // Initial fetch
+      fetchSystemStats().then( stats => {
+        console.log( 'Initial system stats:', stats );
+        updateSystemStatsDisplay( stats, prefix );
+      } );
+
+      // Set up interval for updates every 2 seconds
+      systemMonitorInterval = setInterval( async () => {
+        const stats = await fetchSystemStats();
+        updateSystemStatsDisplay( stats, prefix );
+      }, 2000 );
+    }
+
+    function stopSystemMonitoring() {
+      if ( systemMonitorInterval ) {
+        clearInterval( systemMonitorInterval );
+        systemMonitorInterval = null;
+      }
+    }
+
+    // ...existing code...
+  </script>
+</body>
+
+</html>

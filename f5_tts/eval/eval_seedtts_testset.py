@@ -1,8 +1,10 @@
 # Evaluate with Seed-TTS testset
 
-import sys
-import os
 import argparse
+import json
+import os
+import sys
+
 
 sys.path.append(os.getcwd())
 
@@ -11,11 +13,8 @@ from importlib.resources import files
 
 import numpy as np
 
-from f5_tts.eval.utils_eval import (
-    get_seed_tts_test,
-    run_asr_wer,
-    run_sim,
-)
+from f5_tts.eval.utils_eval import get_seed_tts_test, run_asr_wer, run_sim
+
 
 rel_path = str(files("f5_tts").joinpath("../../"))
 
@@ -52,32 +51,37 @@ def main():
         asr_ckpt_dir = ""  # auto download to cache dir
     wavlm_ckpt_dir = "../checkpoints/UniSpeech/wavlm_large_finetune.pth"
 
-    # --------------------------- WER ---------------------------
+    # --------------------------------------------------------------------------
+
+    full_results = []
+    metrics = []
 
     if eval_task == "wer":
-        wers = []
         with mp.Pool(processes=len(gpus)) as pool:
             args = [(rank, lang, sub_test_set, asr_ckpt_dir) for (rank, sub_test_set) in test_set]
             results = pool.map(run_asr_wer, args)
-            for wers_ in results:
-                wers.extend(wers_)
-
-        wer = round(np.mean(wers) * 100, 3)
-        print(f"\nTotal {len(wers)} samples")
-        print(f"WER      : {wer}%")
-
-    # --------------------------- SIM ---------------------------
-    if eval_task == "sim":
-        sim_list = []
+            for r in results:
+                full_results.extend(r)
+    elif eval_task == "sim":
         with mp.Pool(processes=len(gpus)) as pool:
             args = [(rank, sub_test_set, wavlm_ckpt_dir) for (rank, sub_test_set) in test_set]
             results = pool.map(run_sim, args)
-            for sim_ in results:
-                sim_list.extend(sim_)
+            for r in results:
+                full_results.extend(r)
+    else:
+        raise ValueError(f"Unknown metric type: {eval_task}")
 
-        sim = round(sum(sim_list) / len(sim_list), 3)
-        print(f"\nTotal {len(sim_list)} samples")
-        print(f"SIM      : {sim}")
+    result_path = f"{gen_wav_dir}/_{eval_task}_results.jsonl"
+    with open(result_path, "w") as f:
+        for line in full_results:
+            metrics.append(line[eval_task])
+            f.write(json.dumps(line, ensure_ascii=False) + "\n")
+        metric = round(np.mean(metrics), 5)
+        f.write(f"\n{eval_task.upper()}: {metric}\n")
+
+    print(f"\nTotal {len(metrics)} samples")
+    print(f"{eval_task.upper()}: {metric}")
+    print(f"{eval_task.upper()} results saved to {result_path}")
 
 
 if __name__ == "__main__":
