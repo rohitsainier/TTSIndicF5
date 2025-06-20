@@ -21,6 +21,18 @@ IndicF5 supports **11 Indian languages**:
 
 ## 🚀 Installation
 
+#### Docker
+
+```sh
+# to build and run using docker locally
+docker compose up --build
+
+# to run prod version in docker
+docker compose -f docker-compose-prod.yml --env-file .env.prod up
+```
+
+#### Dev
+
 ```bash
 conda create -n indicf5 python=3.12 -y
 conda activate indicf5

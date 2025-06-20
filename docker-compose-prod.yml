@@ -1,30 +1,33 @@
 services:
   indicf5-tts:
-    image: ghcr.io/hareeshbabu82ns/ttsinficf5:0.0.2
+    env_file:
+      - .env.prod
+    image: ghcr.io/hareeshbabu82ns/ttsindicf5:${VERSION:-0.0.3}
     ports:
-      - "8000:8000"
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: "all"
-              capabilities: [ gpu ]
+      - "${PORT:-8000}:8000"
+    # Uncomment the following lines if you want to use GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: "all"
+    #           capabilities: [ gpu ]
     volumes:
       - tts_data:/app/data
       - tts_cache:/tmp/transformers_cache
     environment:
-      - PYTHONUNBUFFERED=1
-      - HOST=0.0.0.0
+      - PYTHONUNBUFFERED=${PYTHONUNBUFFERED:-1}
+      - HOST=${HOST:-0.0.0.0}
       - PORT=8000
-      - WORKERS=1
-      - ENVIRONMENT=production
-      - NUMBA_CACHE_DIR=/tmp/numba_cache
-      - NUMBA_DISABLE_JIT=0
-      - TRANSFORMERS_CACHE=/tmp/transformers_cache
-      - HF_HOME=/tmp/transformers_cache
-      - HF_HUB_CACHE=/tmp/transformers_cache
-      - PYTHONWARNINGS=ignore::UserWarning
+      - WORKERS=${WORKERS:-1}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - NUMBA_CACHE_DIR=${NUMBA_CACHE_DIR:-/tmp/numba_cache}
+      - NUMBA_DISABLE_JIT=${NUMBA_DISABLE_JIT:-0}
+      - TRANSFORMERS_CACHE=${TRANSFORMERS_CACHE:-/tmp/transformers_cache}
+      - HF_HOME=${HF_HOME:-/tmp/transformers_cache}
+      - HF_HUB_CACHE=${HF_HUB_CACHE:-/tmp/transformers_cache}
+      - PYTHONWARNINGS=${PYTHONWARNINGS:-ignore::UserWarning}
     restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/api/health" ]
