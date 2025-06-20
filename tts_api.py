@@ -356,12 +356,13 @@ async def root():
         "message": "TTS IndicF5 API Server",
         "version": "1.0.0",
         "model": "hareeshbabu82/TeluguIndicF5",
-        "web_interface": "/web",
+        "web_interface": "/api_demo.html",
         "api_docs": "/docs",
-        "api_base": "/api"
+        "api_base": "/api",
+        "health": "/health - Health check",
     }
 
-@app.get("/web", response_class=HTMLResponse)
+@app.get("/api_demo.html", response_class=HTMLResponse)
 async def web_interface():
     """Serve the web interface"""
     if not API_CONFIG["serve_web_interface"]:
@@ -1143,21 +1144,6 @@ if os.path.exists("static"):
 # Note: Removed /data mount to avoid conflicts with /api/files endpoints
 # Files should be accessed through /api/files/{filename} instead
 
-if __name__ == "__main__":
-    try:
-        import uvicorn
-        from config import SERVER_CONFIG
-        uvicorn.run(
-            app, 
-            host=SERVER_CONFIG["host"], 
-            port=SERVER_CONFIG["port"],
-            reload=SERVER_CONFIG["reload"]
-        )
-    except ImportError:
-        logger.error("uvicorn not installed. Please install with: pip install uvicorn[standard]")
-    except Exception as e:
-        logger.error(f"Failed to start server: {e}")
-
 # Add test endpoint for chunking demo
 @api_router.post("/tts/chunk-demo")
 async def chunk_demo(text: str):
@@ -1184,3 +1170,35 @@ async def chunk_demo(text: str):
     except Exception as e:
         logger.error(f"Chunk demo failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Chunk demo failed: {str(e)}")
+
+
+if __name__ == "__main__":
+    import argparse
+    from config import SERVER_CONFIG
+    
+    logger.info("🚀 ========================================")
+    logger.info("🚀 IndicF5 TTS API Server Starting...")
+    logger.info("🚀 ========================================")
+    
+    parser = argparse.ArgumentParser(description="IndicF5 TTS REST API Server")
+    parser.add_argument("--host", default=SERVER_CONFIG["host"], help="Host to bind to")
+    parser.add_argument("--port", type=int, default=SERVER_CONFIG["port"], help="Port to bind to")
+    parser.add_argument("--reload", action="store_true", default=SERVER_CONFIG["reload"], help="Enable auto-reload for development")
+
+    args = parser.parse_args()
+    
+    logger.info(f"🌐 Starting server on {args.host}:{args.port}")
+    logger.info(f"🔄 Auto-reload: {args.reload}")
+    try:
+        import uvicorn
+        
+        uvicorn.run(
+            app,
+            host=args.host,
+            port=args.port,
+            reload=args.reload
+        )
+    except ImportError:
+        logger.error("uvicorn not installed. Please install with: pip install uvicorn[standard]")
+    except Exception as e:
+        logger.error(f"Failed to start server: {e}")

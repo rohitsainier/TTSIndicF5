@@ -88,8 +88,8 @@ fi
 
 echo "✅ Starting API server on http://localhost:8000"
 echo "📖 API Documentation: http://localhost:8000/docs"
-echo "🌐 Web Interface: http://localhost:8000/web"
-echo "🔍 Health Check: http://localhost:8000/health"
+echo "🌐 Web Interface: http://localhost:8000/api_demo.html"
+echo "🔍 Health Check: http://localhost:8000/api/health"
 echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""

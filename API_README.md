@@ -57,6 +57,7 @@ python tts_api.py
 ```
 
 The startup scripts will automatically:
+
 - Create and activate a virtual environment
 - Install required dependencies
 - Start the server
@@ -64,7 +65,8 @@ The startup scripts will automatically:
 ### 3. View API Documentation
 
 Open your browser and go to:
-- API Interface: `http://localhost:8000/web`
+
+- API Interface: `http://localhost:8000/api_demo.html`
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
@@ -73,9 +75,11 @@ Open your browser and go to:
 ### Core TTS Endpoints
 
 ### `POST /api/tts`
+
 Convert single text to speech. Audio files are automatically saved to the server's output directory.
 
 **Request:**
+
 ```json
 {
   "text": "नमस्ते, मैं एक टेक्स्ट-टू-स्पीच सिस्टम हूं।",
@@ -87,6 +91,7 @@ Convert single text to speech. Audio files are automatically saved to the server
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -105,9 +110,11 @@ Convert single text to speech. Audio files are automatically saved to the server
 ```
 
 ### `POST /api/tts/batch`
+
 Process multiple TTS requests in a single call. All generated files are saved to the server.
 
 **Request:**
+
 ```json
 {
   "requests": [
@@ -119,7 +126,7 @@ Process multiple TTS requests in a single call. All generated files are saved to
       "normalize": true
     },
     {
-      "text": "दूसरा वाक्य", 
+      "text": "दूसरा वाक्य",
       "reference_voice_key": "hin_f_happy",
       "output_format": "wav",
       "sample_rate": 24000,
@@ -133,9 +140,11 @@ Process multiple TTS requests in a single call. All generated files are saved to
 ### File Management Endpoints
 
 ### `GET /api/files`
+
 List all generated audio files from the server's output directory.
 
 **Response:**
+
 ```json
 {
   "files": [
@@ -153,14 +162,17 @@ List all generated audio files from the server's output directory.
 ```
 
 ### `GET /api/files/{filename}`
+
 Download a specific generated audio file from the server.
 
 **Response:** Binary audio file with appropriate Content-Type header.
 
 ### `DELETE /api/files/{filename}`
+
 Delete a specific generated audio file from the server.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -169,9 +181,11 @@ Delete a specific generated audio file from the server.
 ```
 
 ### `DELETE /api/files`
+
 Delete all generated audio files from the server.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -183,21 +197,26 @@ Delete all generated audio files from the server.
 ### Voice Management Endpoints
 
 ### `GET /api/referenceVoices`
+
 List all available reference voices.
 
 ### `GET /api/referenceVoices/{reference_voice_key}/audio`
+
 Download the audio file for a specific voice.
 
 ### `POST /api/referenceVoices/upload`
+
 Upload a new reference voice to the server.
 
 **Request:** Multipart form data with:
+
 - `file`: Audio file (wav, mp3, flac)
 - `name`: Display name for the voice
 - `author`: Author/source of the voice
 - `content`: Optional text content for the voice
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -207,22 +226,26 @@ Upload a new reference voice to the server.
 ```
 
 ### `DELETE /api/referenceVoices/{reference_voice_key}`
+
 Delete a reference voice from the server.
 
 **Response:**
+
 ```json
 {
   "success": true,
-  "message": "Voice 'my_voice' deleted successfully"  
+  "message": "Voice 'my_voice' deleted successfully"
 }
 ```
 
 ### File Metadata Management Endpoints
 
 ### `GET /api/files/metadata`
+
 Get metadata for all generated files with information about file name, prompt used, text input, creation date, size, and format.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -243,9 +266,11 @@ Get metadata for all generated files with information about file name, prompt us
 ```
 
 ### `GET /api/files/metadata/{filename}`
+
 Get metadata for a specific generated file.
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -263,9 +288,11 @@ Get metadata for a specific generated file.
 ```
 
 ### `POST /api/files/metadata`
+
 Create metadata entry for an existing file (useful if file exists but metadata is missing).
 
 **Request:**
+
 ```json
 {
   "filename": "existing_file.wav",
@@ -276,6 +303,7 @@ Create metadata entry for an existing file (useful if file exists but metadata i
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -293,9 +321,11 @@ Create metadata entry for an existing file (useful if file exists but metadata i
 ```
 
 ### `PUT /api/files/metadata/{filename}`
+
 Update metadata for an existing file.
 
 **Request:**
+
 ```json
 {
   "reference_voice_key": "new_reference_voice_key",
@@ -304,6 +334,7 @@ Update metadata for an existing file.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -321,9 +352,11 @@ Update metadata for an existing file.
 ```
 
 ### `DELETE /api/files/metadata/{filename}`
+
 Delete metadata for a specific file (file itself remains intact).
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -341,9 +374,11 @@ Delete metadata for a specific file (file itself remains intact).
 ```
 
 ### `DELETE /api/files/metadata`
+
 Delete all file metadata entries (files themselves remain intact).
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -356,18 +391,21 @@ Delete all file metadata entries (files themselves remain intact).
 ### Other Endpoints
 
 ### `GET /api/health`
+
 Check API health and model status.
 
 ### `GET /api/`
+
 Get API information and available endpoints.
 
-### `GET /web`
+### `GET /api_demo.html`
+
 Access the web interface for the TTS system.
 
 ## File Storage
 
 - **Generated Audio Files**: Automatically saved to `PATHS["output_dir"]` (default: `./data/out/`)
-- **Reference Voices**: Stored in `PATHS["reference_voices_dir"]` (default: `./data/reference_voices/`)  
+- **Reference Voices**: Stored in `PATHS["reference_voices_dir"]` (default: `./data/reference_voices/`)
 - **File Formats**: WAV, MP3, FLAC supported
 - **Naming Convention**: `tts_{reference_voice_key}_{timestamp}.{format}`
 
@@ -390,6 +428,7 @@ Generated file metadata is automatically stored in `./data/out/files_metadata.js
 ```
 
 The metadata includes:
+
 - **filename**: Name of the generated audio file
 - **reference_voice_key**: Which reference voice was used for generation
 - **text_input**: Original text that was converted to speech
@@ -400,26 +439,30 @@ The metadata includes:
 
 ## Web Interface CRUD Operations
 
-The enhanced web interface (`/web`) now provides comprehensive file metadata management with full CRUD operations:
+The enhanced web interface (`/api_demo.html`) now provides comprehensive file metadata management with full CRUD operations:
 
 ### 🎯 **Enhanced File Display**
+
 - **Original Text Preview**: See the text that was used to generate each file
 - **Reference Voice Information**: View which voice was used for generation
 - **Metadata Status Indicators**: Visual indicators for files with/without metadata
 - **Interactive File Cards**: Rich file information with embedded audio players
 
 ### 🔧 **Metadata Management**
+
 - **View Full Details**: Click "📋 Details" to see complete metadata information
 - **Edit Metadata**: Click "✏️" to modify prompt key or text input
 - **Add Missing Metadata**: Click "➕" to add metadata to files that don't have it
 - **Delete Confirmation**: Enhanced deletion with metadata cleanup
 
 ### 📊 **Statistics & Analytics**
+
 - **Metadata Coverage**: Real-time statistics showing metadata completion percentage
 - **File Counts**: Track total files vs files with metadata
 - **Storage Information**: File size and storage usage tracking
 
 ### 🛠️ **Bulk Operations**
+
 - **Metadata Management Section**: Collapsible tools panel with advanced features
 - **Export Metadata**: Download all metadata as JSON file
 - **Clear All Metadata**: Bulk deletion of metadata (files remain intact)
@@ -427,6 +470,7 @@ The enhanced web interface (`/web`) now provides comprehensive file metadata man
 - **Refresh All Data**: Update all statistics and file listings
 
 ### 💡 **User Experience Enhancements**
+
 - **Modal Dialogs**: Professional forms for metadata editing
 - **Real-time Updates**: Automatic refresh after operations
 - **Error Handling**: Clear feedback for all operations
@@ -444,6 +488,7 @@ python api_client_example.py
 ```
 
 This will:
+
 1. Check API health
 2. List available referenceVoices
 3. Test single TTS generation
@@ -459,6 +504,7 @@ python test_file_metadata.py
 ```
 
 This will test:
+
 1. Creating metadata entries for existing files
 2. Reading all file metadata
 3. Reading specific file metadata
@@ -474,6 +520,7 @@ python test_web_integration.py
 ```
 
 This will verify:
+
 1. API endpoint connectivity
 2. File and metadata endpoint integration
 3. Web interface functionality
@@ -523,6 +570,7 @@ The API provides detailed error responses:
 ```
 
 Common error codes:
+
 - `400`: Bad request (invalid voice key, malformed input)
 - `500`: Internal server error (model failure, file I/O issues)
 
@@ -531,12 +579,14 @@ Common error codes:
 For production deployment:
 
 1. Use a production ASGI server:
+
 ```bash
 pip install gunicorn
 gunicorn tts_api:app -w 1 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 ```
 
 2. Set up reverse proxy (nginx):
+
 ```nginx
 location /tts/ {
     proxy_pass http://localhost:8000/;
@@ -546,6 +596,7 @@ location /tts/ {
 ```
 
 3. Configure CORS for your domain:
+
 ```python
 app.add_middleware(
     CORSMiddleware,
