@@ -210,6 +210,14 @@
             <label for="normalize" class="text-chalk-200">Normalize audio</label>
           </div>
 
+          <div>
+            <label for="seed" class="block text-chalk-200 font-semibold mb-2">Seed (for reproducible results):</label>
+            <input type="number" id="seed" value="-1" min="-1" max="2147483647" 
+              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none"
+              placeholder="Enter seed (-1 for random)">
+            <p class="text-chalk-400 text-sm mt-1">Use -1 for random seed, or enter a number (0-2147483647) for reproducible results</p>
+          </div>
+
           <button type="submit"
             class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-3 px-6 rounded-md font-bold text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
             🚀 Generate Speech
@@ -664,6 +672,7 @@
       const format = document.getElementById( 'singleFormat' ).value;
       const sampleRate = parseInt( document.getElementById( 'sampleRate' ).value );
       const normalize = document.getElementById( 'normalize' ).checked;
+      const seed = parseInt( document.getElementById( 'seed' ).value );
 
       const resultDiv = document.getElementById( 'singleResult' );
       const loadingDiv = document.getElementById( 'singleLoading' );
@@ -687,7 +696,8 @@
             reference_voice_key: referenceVoiceKey,
             output_format: format,
             sample_rate: sampleRate,
-            normalize: normalize
+            normalize: normalize,
+            seed: seed
           } )
         } );
 
@@ -710,6 +720,7 @@
               <div class="text-sm space-y-1">
                 <div>Duration: ${data.duration.toFixed( 2 )} seconds</div>
                 <div>Filename: ${data.filename}</div>
+                <div>Used Seed: ${data.used_seed || 'N/A'}</div>
                 <div>File saved to server output directory</div>
               </div>
               <audio controls class="w-full mt-3 h-8" style="filter: hue-rotate(90deg);">
@@ -720,6 +731,10 @@
                 <button onclick="downloadFileFromServer('${data.filename}')" 
                   class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md text-sm">
                   📥 Download
+                </button>
+                <button onclick="document.getElementById('seed').value = '${data.used_seed || -1}'" 
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md text-sm">
+                  🎯 Use This Seed
                 </button>
               </div>
             </div>

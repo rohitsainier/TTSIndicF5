@@ -16,6 +16,7 @@ from typing import List, Optional, Dict, Any, Tuple
 import re
 from pydub import AudioSegment
 import tempfile
+import torch
 from config import get_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG
 
 # Configure logging
@@ -80,13 +81,14 @@ class TTSProcessor:
         """Get information about a specific referenceVoices"""
         return self.reference_voices.get(reference_voice_key)
 
-    def generate_audio(self, text: str, reference_voice_key: str) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def generate_audio(self, text: str, reference_voice_key: str, seed: int = -1) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         Generate audio using the model
         
         Args:
             text: Text to convert to speech
             reference_voice_key: Key for the reference audio prompt
+            seed: Random seed for reproducible generation (-1 for random)
 
         Returns:
             Tuple of (audio_array, reference_voice_info)
@@ -96,6 +98,13 @@ class TTSProcessor:
 
         if reference_voice_key not in self.reference_voices:
             raise ValueError(f"ReferenceVoices key '{reference_voice_key}' not found")
+
+        # Set inference seed
+        if seed < 0 or seed > 2**31 - 1:
+            print("Warning: Seed must be in range 0 ~ 2147483647. Using random seed instead.")
+            seed = np.random.randint(0, 2**31 - 1)
+        torch.manual_seed(seed)
+        used_seed = seed
 
         reference_voice_info = self.reference_voices[reference_voice_key]
         
@@ -113,7 +122,11 @@ class TTSProcessor:
             ref_text=reference_voice_info["content"],
         )
         
-        return audio, reference_voice_info
+        # Add used seed to reference voice info
+        reference_voice_info_with_seed = reference_voice_info.copy()
+        reference_voice_info_with_seed["used_seed"] = used_seed
+        
+        return audio, reference_voice_info_with_seed
     
     def split_text_into_chunks(self, text: str, max_chars: int = 300) -> List[str]:
         """
@@ -284,7 +297,7 @@ class TTSProcessor:
     
     def process_single_text(self, text: str, reference_voice_key: str, output_path: str = None, 
                            sample_rate: int = 24000, normalize: bool = True, 
-                           max_chunk_chars: int = 300) -> Dict[str, Any]:
+                           max_chunk_chars: int = 300, seed: int = -1) -> Dict[str, Any]:
         """
         Process a single text and generate audio
         
@@ -295,6 +308,7 @@ class TTSProcessor:
             sample_rate: Sample rate for the output
             normalize: Whether to normalize the audio
             max_chunk_chars: Maximum characters per chunk for long texts
+            seed: Random seed for reproducible generation (-1 for random)
             
         Returns:
             Dictionary with processing results
@@ -321,7 +335,7 @@ class TTSProcessor:
                         logger.info(f"Processing chunk {i+1}/{len(text_chunks)}: {chunk[:50]}...")
                         
                         # Generate audio for this chunk
-                        chunk_audio, reference_voices_info = self.generate_audio(chunk, reference_voice_key)
+                        chunk_audio, reference_voices_info = self.generate_audio(chunk, reference_voice_key, seed)
                         
                         # Normalize audio if requested
                         if normalize:
@@ -374,7 +388,7 @@ class TTSProcessor:
                 logger.info(f"Text length {len(text)} <= {max_chunk_chars} chars, processing as single chunk")
                 
                 # Generate audio
-                final_audio, reference_voices_info = self.generate_audio(text, reference_voice_key)
+                final_audio, reference_voices_info = self.generate_audio(text, reference_voice_key, seed)
 
                 # Normalize audio if requested
                 if normalize:

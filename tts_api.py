@@ -99,6 +99,7 @@ class TTSRequest(BaseModel):
     output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
     sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
     normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
+    seed: Optional[int] = Field(-1, description="Random seed for reproducible generation (-1 for random)")
 
 class TTSBatchRequest(BaseModel):
     requests: List[TTSRequest] = Field(..., description="List of TTS requests to process")
@@ -112,6 +113,7 @@ class TTSResponse(BaseModel):
     sample_rate: int
     message: Optional[str] = None
     reference_voice_info: Optional[Dict[str, Any]] = None
+    used_seed: Optional[int] = None
 
 class TTSBatchResponse(BaseModel):
     success: bool
@@ -276,10 +278,10 @@ def delete_file_metadata(filename: str) -> bool:
         logger.error(f"Failed to delete file metadata for {filename}: {e}")
         return False
 
-async def generate_audio_async(text: str, reference_voice_key: str) -> tuple[np.ndarray, Dict[str, Any]]:
+async def generate_audio_async(text: str, reference_voice_key: str, seed: int = -1) -> tuple[np.ndarray, Dict[str, Any]]:
     """Async wrapper for TTS processor to run in thread pool"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, reference_voice_key)
+    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, reference_voice_key, seed)
 
 # New helper functions
 import re
@@ -291,7 +293,7 @@ def has_reference_voice_tags(text: str) -> bool:
 
 async def process_text_with_intelligent_routing(text: str, reference_voice_key: str, output_path: str, 
                                                sample_rate: int = 24000, normalize: bool = True,
-                                               output_format: str = "wav") -> Dict[str, Any]:
+                                               output_format: str = "wav", seed: int = -1) -> Dict[str, Any]:
     """
     Intelligently route text processing based on whether it contains prompt tags
     """
@@ -326,12 +328,13 @@ async def process_text_with_intelligent_routing(text: str, reference_voice_key: 
                 output_path,
                 sample_rate,
                 normalize,
-                300  # max_chunk_chars
+                300,  # max_chunk_chars
+                seed
             )
             return result
         else:
             # Use direct generation for short texts
-            audio, reference_voice_info = await generate_audio_async(text, reference_voice_key)
+            audio, reference_voice_info = await generate_audio_async(text, reference_voice_key, seed)
             
             # Normalize audio if requested
             if normalize:
@@ -478,7 +481,8 @@ async def text_to_speech(request: TTSRequest):
             output_path=file_path,
             sample_rate=request.sample_rate,
             normalize=request.normalize,
-            output_format=request.output_format
+            output_format=request.output_format,
+            seed=request.seed
         )
         
         if not result["success"]:
@@ -488,6 +492,7 @@ async def text_to_speech(request: TTSRequest):
         audio_data = result["audio_data"]
         audio_base64 = audio_to_base64(audio_data, request.sample_rate, request.output_format)
         reference_voice_info = result["reference_voice_info"]
+        used_seed = reference_voice_info.get("used_seed") if isinstance(reference_voice_info, dict) else None
         
         # Add file metadata
         add_file_metadata(filename, request.reference_voice_key, request.text, request.output_format)
@@ -502,6 +507,7 @@ async def text_to_speech(request: TTSRequest):
             duration=duration,
             sample_rate=request.sample_rate,
             reference_voice_info=reference_voice_info,
+            used_seed=used_seed,
             message="TTS generation successful"
         )
         
