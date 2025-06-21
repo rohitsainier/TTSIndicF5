@@ -157,10 +157,10 @@ def audio_to_base64(audio_data: np.ndarray, sample_rate: int, format: str = "wav
     """Convert audio numpy array to base64 encoded string"""
     return tts_processor.audio_to_base64(audio_data, sample_rate, format)
 
-async def generate_audio_async(text: str, reference_voice_key: str, seed: int = -1) -> tuple[np.ndarray, Dict[str, Any]]:
+async def generate_audio_async(text: str, reference_voice_key: str, seed: int = -1, sample_rate: int = 24000) -> tuple[np.ndarray, Dict[str, Any]]:
     """Async wrapper for TTS processor to run in thread pool"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, reference_voice_key, seed)
+    return await loop.run_in_executor(executor, tts_processor.generate_audio, text, reference_voice_key, seed, sample_rate)
 
 # New helper functions
 import re
@@ -190,7 +190,8 @@ async def process_text_with_intelligent_routing(text: str, reference_voice_key: 
             sample_rate,
             normalize,
             300,  # max_chunk_chars
-            200   # pause_duration
+            200,   # pause_duration
+            seed,
         )
         return result
     else:
@@ -370,7 +371,7 @@ async def text_to_speech(request: TTSRequest):
         # Load the generated audio for base64 conversion
         audio_data = result["audio_data"]
         audio_base64 = audio_to_base64(audio_data, request.sample_rate or 24000, request.output_format or "wav")
-        reference_voice_info = result["reference_voice_info"]
+        reference_voice_info = result["reference_voice_info"] if "reference_voice_info" in result else result.get("segment_results", [])[0] if "segment_results" in result else None
         used_seed = reference_voice_info.get("used_seed") if isinstance(reference_voice_info, dict) else None
         
         end_time = datetime.now()
@@ -506,7 +507,8 @@ async def reference_voice_tagged_text_to_speech(request: TTSPromptTaggedRequest)
             sample_rate=request.sample_rate,
             normalize=request.normalize,
             max_chunk_chars=request.max_chunk_chars,
-            pause_duration=request.pause_duration
+            pause_duration=request.pause_duration,
+            seed=request.seed
         )
         
         if not result["success"]:

@@ -3,6 +3,14 @@
     "author": "AI Female Panjabi Happy",
     "file": "PAN_F_HAPPY_00001.wav",
     "content": "ਭਹੰਪੀ ਵਿੱਚ ਸਮਾਰਕਾਂ ਦੇ ਭਵਨ ਨਿਰਮਾਣ ਕਲਾ ਦੇ ਵੇਰਵੇ ਗੁੰਝਲਦਾਰ ਅਤੇ ਹੈਰਾਨ ਕਰਨ ਵਾਲੇ ਹਨ, ਜੋ ਮੈਨੂੰ ਖੁਸ਼ ਕਰਦੇ  ਹਨ।",
-    "sample_rate": 16000
+    "sample_rate": 16000,
+    "model": "IndicF5"
+  },
+  "ENG_M_WIKI_00001": {
+    "author": "AI Male English Wiki",
+    "file": "ENG_M_WIKI_00001.wav",
+    "content": "Some call me nature, others call me mother nature.",
+    "sample_rate": 16000,
+    "model": "F5TTS"
   }
 }

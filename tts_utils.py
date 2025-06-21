@@ -14,10 +14,12 @@ from transformers import AutoModel
 import logging
 from typing import List, Optional, Dict, Any, Tuple
 import re
-from pydub import AudioSegment
+from pydub import AudioSegment, silence
 import tempfile
 import torch
 from config import get_config, MODEL_CONFIG, PATHS, AUDIO_CONFIG
+from f5_tts.api import F5TTS
+from f5_tts.model.utils import seed_everything
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ class TTSProcessor:
             reference_voices_file: Path to reference_voices.json file
         """
         self.model = None
+        self.modelF5TTS = None
         self.reference_voices = {}
         
         # Use config values if not provided
@@ -47,17 +50,23 @@ class TTSProcessor:
     
     def load_model(self):
         """Load the TTS model from Hugging Face"""
-        if self.model is not None:
-            logger.info("Model already loaded")
+        if self.model is not None and self.modelF5TTS is not None:
+            logger.info("Models already loaded")
             return
-            
-        logger.info(f"Loading IndicF5 model from {self.model_repo_id}...")
-        self.model = AutoModel.from_pretrained(
-            self.model_repo_id,
-            trust_remote_code=MODEL_CONFIG["trust_remote_code"],
-            cache_dir=self.cache_dir
-        )
-        logger.info(f"Model {self.model_repo_id} loaded successfully")
+
+        if not self.model:            
+            logger.info(f"Loading IndicF5 model from {self.model_repo_id}...")
+            self.model = AutoModel.from_pretrained(
+                self.model_repo_id,
+                trust_remote_code=MODEL_CONFIG["trust_remote_code"],
+                cache_dir=self.cache_dir
+            )
+            logger.info(f"Model {self.model_repo_id} loaded successfully")
+
+        if not self.modelF5TTS:
+            logger.info(f"Loading F5TTS model using F5TTS_Base...")
+            self.modelF5TTS = F5TTS(model="F5TTS_Base", hf_cache_dir=self.cache_dir)
+            logger.info(f"F5TTS model F5TTS_Base loaded successfully")
 
     def load_reference_voices(self):
         """Load referenceVoices from reference_voices.json file"""
@@ -81,7 +90,7 @@ class TTSProcessor:
         """Get information about a specific referenceVoices"""
         return self.reference_voices.get(reference_voice_key)
 
-    def generate_audio(self, text: str, reference_voice_key: str, seed: int = -1) -> Tuple[np.ndarray, Dict[str, Any]]:
+    def generate_audio(self, text: str, reference_voice_key: str, seed: int = -1, sample_rate: int = 24000) -> Tuple[np.ndarray, Dict[str, Any]]:
         """
         Generate audio using the model
         
@@ -89,12 +98,15 @@ class TTSProcessor:
             text: Text to convert to speech
             reference_voice_key: Key for the reference audio prompt
             seed: Random seed for reproducible generation (-1 for random)
+            sample_rate: Sample rate for the output audio
 
         Returns:
             Tuple of (audio_array, reference_voice_info)
         """
         if self.model is None:
             raise RuntimeError("Model not loaded. Call load_model() first.")
+        if self.modelF5TTS is None:
+            raise RuntimeError("F5TTS model not loaded. Call load_model() first.")
 
         if reference_voice_key not in self.reference_voices:
             raise ValueError(f"ReferenceVoices key '{reference_voice_key}' not found")
@@ -103,7 +115,7 @@ class TTSProcessor:
         if seed < 0 or seed > 2**31 - 1:
             print("Warning: Seed must be in range 0 ~ 2147483647. Using random seed instead.")
             seed = np.random.randint(0, 2**31 - 1)
-        torch.manual_seed(seed)
+        seed_everything(seed)
         used_seed = seed
 
         reference_voice_info = self.reference_voices[reference_voice_key]
@@ -115,19 +127,42 @@ class TTSProcessor:
         if not os.path.exists(ref_audio_path):
             raise ValueError(f"Reference audio file {reference_voice_info['file']} not found at {ref_audio_path}")
         
-        # Generate speech
-        audio = self.model(
-            text,
-            ref_audio_path=ref_audio_path,
-            ref_text=reference_voice_info["content"],
-        )
+        # Check what is the model of Reference voice
+        if "model" not in reference_voice_info or reference_voice_info["model"] in ["IndicF5"]:            
+            logger.info("using IndicF5 model...")
+            # Generate speech using IndicF5 model
+            audio = self.model(
+                text,
+                ref_audio_path=ref_audio_path,
+                ref_text=reference_voice_info["content"],
+            ) 
+        elif reference_voice_info["model"] in ["F5TTS"]:
+            logger.info("using F5TTS model...")
+            # Generate speech using F5TTS model
+            wav = self.modelF5TTS.infer(
+                    ref_file=ref_audio_path,
+                    ref_text=reference_voice_info["content"],
+                    gen_text=text,
+                    target_rms=0.1,
+                    seed=used_seed,
+                    # file_wave=str(files("data").joinpath("out/api_out.wav")),
+                    # file_spec=str(files("data").joinpath("out/api_out.png")),
+            )
+            if wav is None:
+                raise ValueError(f"F5TTS model failed to generate audio")
+            audio = convert_wav_and_remove_silence(audio=wav,  # type: ignore
+                        sample_rate=sample_rate,
+                        )
+            # audio = wav  # Assuming wav is already in the correct format
+        else:
+            raise ValueError(f"Invalid model type in reference voice info: {reference_voice_info}")
         
         # Add used seed to reference voice info
         reference_voice_info_with_seed = reference_voice_info.copy()
         reference_voice_info_with_seed["used_seed"] = used_seed
-        
-        return audio, reference_voice_info_with_seed
-    
+
+        return audio, reference_voice_info_with_seed # type: ignore
+
     def split_text_into_chunks(self, text: str, max_chars: int = 300) -> List[str]:
         """
         Split text into chunks of maximum character length, preserving sentence structure
@@ -335,7 +370,7 @@ class TTSProcessor:
                         logger.info(f"Processing chunk {i+1}/{len(text_chunks)}: {chunk[:50]}...")
                         
                         # Generate audio for this chunk
-                        chunk_audio, reference_voices_info = self.generate_audio(chunk, reference_voice_key, seed)
+                        chunk_audio, reference_voice_info = self.generate_audio(chunk, reference_voice_key, seed, sample_rate)
                         
                         # Normalize audio if requested
                         if normalize:
@@ -388,7 +423,7 @@ class TTSProcessor:
                 logger.info(f"Text length {len(text)} <= {max_chunk_chars} chars, processing as single chunk")
                 
                 # Generate audio
-                final_audio, reference_voices_info = self.generate_audio(text, reference_voice_key, seed)
+                final_audio, reference_voice_info = self.generate_audio(text, reference_voice_key, seed, sample_rate)
 
                 # Normalize audio if requested
                 if normalize:
@@ -407,7 +442,7 @@ class TTSProcessor:
                 "audio_data": final_audio,
                 "sample_rate": sample_rate,
                 "duration": duration,
-                "reference_voices_info": reference_voices_info,
+                "reference_voice_info": reference_voice_info,
                 "output_path": output_path,
                 "message": "TTS generation successful"
             }
@@ -444,6 +479,7 @@ class TTSProcessor:
         
         results = []
         start_time = datetime.now()
+        used_seed = -1
         
         # Ensure output directory exists if provided
         if output_dir:
@@ -467,10 +503,12 @@ class TTSProcessor:
                     output_path=output_path,
                     sample_rate=sample_rate,
                     normalize=normalize,
-                    max_chunk_chars=max_chunk_chars
+                    max_chunk_chars=max_chunk_chars,
+                    seed=used_seed
                 )
                 
                 result["batch_index"] = i
+                used_seed = result.get("reference_voice_info", {}).get("used_seed", -1)
                 results.append(result)
                 
             except Exception as e:
@@ -559,7 +597,7 @@ class TTSProcessor:
     
     def process_reference_voice_tagged_text(self, text: str, base_reference_voice_key: str = None, output_path: str = None, 
                                  sample_rate: int = 24000, normalize: bool = True,
-                                 max_chunk_chars: int = 300, pause_duration: int = 200) -> Dict[str, Any]:
+                                 max_chunk_chars: int = 300, pause_duration: int = 200, seed: int = -1) -> Dict[str, Any]:
         """
         Process text containing multiple <refvoice key="reference_voice_key">text</refvoice> tags
         and generate combined audio
@@ -601,7 +639,7 @@ class TTSProcessor:
             
             try:
                 for i, segment in enumerate(segments):
-                    logger.info(f"Processing segment {i+1}/{len(segments)} with referenceVoices '{segment['reference_voice_key']}': {segment['text'][:50]}...")
+                    logger.info(f"Processing segment {i+1}/{len(segments)} with referenceVoices '{segment['reference_voice_key']}'...")
 
                     # Process this segment
                     result = self.process_single_text(
@@ -610,8 +648,10 @@ class TTSProcessor:
                         output_path=None,  # Don't save individual segments
                         sample_rate=sample_rate,
                         normalize=normalize,
-                        max_chunk_chars=max_chunk_chars
+                        max_chunk_chars=max_chunk_chars,
+                        seed=seed
                     )
+                    used_seed = result.get("reference_voice_info", {}).get("used_seed", -1)
                     
                     if not result['success']:
                         raise Exception(f"Failed to process segment {i+1}: {result.get('error', 'Unknown error')}")
@@ -629,7 +669,8 @@ class TTSProcessor:
                         'reference_voice_key': segment['reference_voice_key'],
                         'text': segment['text'],
                         'success': True,
-                        'audio_duration': len(result['audio_data']) / sample_rate
+                        'audio_duration': len(result['audio_data']) / sample_rate,
+                        'used_seed': used_seed,
                     })
                 
                 # Combine all audio segments with pauses
@@ -815,3 +856,44 @@ def generate_speech_from_reference_voice_tags(text: str, base_reference_voice_ke
         sample_rate=sample_rate,
         pause_duration=pause_duration
     )
+
+def is_english_or_latin(text: str) -> bool:
+    # Check for English/Latin characters (basic ASCII + common Latin extensions)
+    latin_pattern = re.compile(r'^[a-zA-Z0-9äöüÄÖÜßèéêëàáâãäåæçéêëìíîïñòóôõöøùúûüýÿ\s\.,!?\'`";\-:()&\^%\$#@~<>/]+$')
+    return bool(latin_pattern.match(text.strip()))
+
+def convert_wav_and_remove_silence(audio: np.ndarray, sample_rate: int = 24000, 
+                                   remove_silence: bool = True) -> np.ndarray:
+    # Convert to pydub format and remove silence if needed
+    # Handle different input types - audio might be a tuple from F5TTS
+    if isinstance(audio, tuple):
+        # If it's a tuple, take the first element (usually the audio data)
+        audio = audio[0]
+    
+    # Convert to numpy array if it's not already
+    if not isinstance(audio, np.ndarray):
+        audio = np.array(audio)
+
+    buffer = io.BytesIO()
+    sf.write(buffer, audio, samplerate=sample_rate, format="WAV")
+    buffer.seek(0)
+    audio_segment = AudioSegment.from_file(buffer, format="wav")
+
+    if remove_silence:
+        non_silent_segs = silence.split_on_silence(
+            audio_segment,
+            min_silence_len=1000,
+            silence_thresh=-50,
+            keep_silence=500,
+            seek_step=10,
+        )
+        non_silent_wave = sum(non_silent_segs, AudioSegment.silent(duration=0))
+        audio_segment = non_silent_wave
+
+    # Normalize loudness
+    target_dBFS = -20.0
+    change_in_dBFS = target_dBFS - audio_segment.dBFS
+    audio_segment = audio_segment.apply_gain(change_in_dBFS)
+    print(f"Audio loudness normalized to {target_dBFS} dBFS")
+
+    return np.array(audio_segment.get_array_of_samples())        

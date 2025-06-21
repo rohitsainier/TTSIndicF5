@@ -4,6 +4,8 @@ import numpy as np
 import soundfile as sf
 import json
 from datetime import datetime
+from importlib.resources import files
+from f5_tts.api import F5TTS
 
 # Global variables
 # DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -43,3 +45,19 @@ timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 sf.write(f"data/out/gen_{timestamp}.wav", np.array(audio, dtype=np.float32), samplerate=24000)
 end_time = time()
 print(f"Audio saved in {end_time - start_time:.2f} seconds")
+
+
+
+f5tts = F5TTS(model="F5TTS_Base")
+start_time = time()
+wav, sr, spec = f5tts.infer(
+    ref_file=str(files("f5_tts").joinpath("infer/examples/basic/basic_ref_en.wav")),
+    ref_text="some call me nature, others call me mother nature.",
+    gen_text="""Berlin ist nicht nur Weltmetropole und die Hauptstadt Deutschlands, sondern auch meine Heimatstadt.""",
+    # gen_text="""I don't really care what you call me. I've been a silent spectator, watching species evolve, empires rise and fall. But always remember, I am mighty and enduring. Respect me and I'll nurture you; ignore me and you shall face the consequences.""",
+    file_wave=str(files("data").joinpath(f"out/gen_f5tts_{timestamp}.wav")),
+    # file_spec=str(files("data").joinpath("out/api_out.png")),
+    # seed=4,
+)
+end_time = time()
+print(f"F5TTS Audio saved in {end_time - start_time:.2f} seconds")
