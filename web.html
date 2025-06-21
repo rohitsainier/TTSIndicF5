@@ -104,29 +104,23 @@
   </style>
 </head>
 
-<body class="bg-chalkboard-950 chalkboard-texture min-h-screen font-chalk text-chalk-100">
+<body class="bg-chalkboard-950 min-h-screen font-chalk text-chalk-100 flex flex-col">
   <!-- Header -->
   <header class="bg-chalkboard-900 border-b-2 border-chalk-600 shadow-lg">
-    <div class="container mx-auto px-4 py-6">
+    <div class="container mx-auto px-4 py-3">
       <div class="text-center">
-        <h1 class="text-4xl font-bold chalk-text text-chalk-100 mb-2">🎤 TTS IndicF5 Chalkboard</h1>
-        <p class="text-chalk-300 text-lg">Text-to-Speech for Indian Languages</p>
-        <div id="apiStatus" class="mt-4 p-3 rounded-lg inline-block">
-          <div class="flex items-center justify-center">
-            <div class="loading-spinner w-5 h-5 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
-            <span class="text-chalk-300">Checking API status...</span>
-          </div>
-        </div>
+        <h1 class="text-3xl font-bold chalk-text text-chalk-100 mb-1">🎤 TTS IndicF5 Chalkboard</h1>
+        <p class="text-chalk-300 text-base">Text-to-Speech for Indian Languages</p>
       </div>
     </div>
   </header>
 
   <!-- Main Content - 3 Column Layout -->
-  <main class="container mx-auto px-4 py-6">
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
+  <main class="container mx-auto px-4 py-6 flex-1 flex flex-col">
+    <div class="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6">
 
       <!-- Left Column: Available Reference Voices -->
-      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+      <div class="flex-1 bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl flex flex-col">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold chalk-text text-chalk-100">🎭 Reference Voices</h2>
           <button onclick="loadReferenceVoices()"
@@ -156,7 +150,7 @@
         </div>
 
         <!-- Reference Voices List -->
-        <div id="referenceVoicesList" class="space-y-3 max-h-96 overflow-y-auto">
+        <div id="referenceVoicesList" class="flex-1 flex flex-col space-y-3 max-h-[600px] overflow-y-auto">
           <div class="flex items-center justify-center py-8">
             <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mr-2"></div>
             <span class="text-chalk-300">Loading reference voices...</span>
@@ -288,7 +282,7 @@
         <div id="singleResult" class="hidden mt-4 p-4 rounded-lg"></div>
 
         <!-- Batch Processing -->
-        <div class="mt-8 pt-6 border-t border-chalk-700">
+        <div class="mt-8 pt-6 border-t border-chalk-700 hidden">
           <h3 class="text-xl font-bold text-chalk-100 mb-4">📦 Batch Processing</h3>
           <div id="batchContainer" class="space-y-3 mb-4">
             <!-- Batch items will be added here dynamically -->
@@ -368,7 +362,7 @@
       </div>
 
       <!-- Right Column: Generated Files History -->
-      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
+      <div class="flex-1 flex flex-col bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-2xl font-bold chalk-text text-chalk-100">📂 Generated Files</h2>
           <button onclick="clearAllFiles()"
@@ -378,7 +372,7 @@
         </div>
 
         <!-- History List -->
-        <div id="historyList" class="space-y-3 max-h-[500px] overflow-y-auto">
+        <div id="historyList" class="flex-1 space-y-3 overflow-y-auto">
           <div class="text-center py-8 text-chalk-400">
             No generated files yet. Create some audio to see them here!
           </div>
@@ -400,6 +394,14 @@
     </div>
 
   </main>
+
+  <!-- API Status - Top Right Corner -->
+  <div id="apiStatus" class="fixed top-4 right-4 p-2 rounded-lg shadow-lg bg-chalkboard-800 border border-chalk-600 z-50">
+    <div class="flex items-center">
+      <div class="loading-spinner w-3 h-3 border border-chalk-300 border-t-transparent rounded-full mr-1"></div>
+      <span class="text-chalk-300 text-xs">Checking...</span>
+    </div>
+  </div>
 
   <script>    const API_BASE = '/api';
     let availableReferenceVoices = {};
@@ -426,28 +428,28 @@
         const data = await response.json();
 
         if ( response.ok && data.status === 'healthy' ) {
-          statusDiv.className = 'p-3 rounded-lg inline-block bg-green-800 border border-green-600';
+          statusDiv.className = 'fixed top-4 right-4 p-2 rounded-lg shadow-lg bg-green-800 border border-green-600 z-50';
           statusDiv.innerHTML = `
             <div class="flex items-center text-green-200">
-              <span class="mr-2">✅</span>
-              <span>API is healthy - Model: ${data.model_loaded ? '✅' : '❌'} - Voices: ${data.available_reference_voices}</span>
+              <span class="mr-1 text-xs">✅</span>
+              <span class="text-xs">API Ready</span>
             </div>
           `;
         } else {
-          statusDiv.className = 'p-3 rounded-lg inline-block bg-red-800 border border-red-600';
+          statusDiv.className = 'fixed top-4 right-4 p-2 rounded-lg shadow-lg bg-red-800 border border-red-600 z-50';
           statusDiv.innerHTML = `
             <div class="flex items-center text-red-200">
-              <span class="mr-2">❌</span>
-              <span>API is not responding properly</span>
+              <span class="mr-1 text-xs">❌</span>
+              <span class="text-xs">API Error</span>
             </div>
           `;
         }
       } catch ( error ) {
-        statusDiv.className = 'p-3 rounded-lg inline-block bg-red-800 border border-red-600';
+        statusDiv.className = 'fixed bottom-4 right-4 p-2 rounded-lg shadow-lg bg-red-800 border border-red-600 z-50';
         statusDiv.innerHTML = `
           <div class="flex items-center text-red-200">
-            <span class="mr-2">❌</span>
-            <span>Cannot connect to API. Make sure server is running on port 8000</span>
+            <span class="mr-1 text-xs">❌</span>
+            <span class="text-xs">No Connection</span>
           </div>
         `;
       }
@@ -514,6 +516,10 @@
 
         if ( currentValue && availableReferenceVoices[ currentValue ] ) {
           select.value = currentValue;
+        } else if ( select.id === 'singleReferenceVoice' && !select.value && Object.keys( availableReferenceVoices ).length > 0 ) {
+          // Auto-select first item for singleReferenceVoice if not already selected and has items
+          const firstKey = Object.keys( availableReferenceVoices )[0];
+          select.value = firstKey;
         }
       } );
     }
