@@ -128,6 +128,7 @@ class PromptInfo(BaseModel):
     content: str
     file: str
     sample_rate: int
+    model: str
 
 class ReferenceVoicesResponse(BaseModel):
     reference_voices: Dict[str, PromptInfo]
@@ -710,7 +711,7 @@ async def clear_all_files():
 
 # Add upload and delete endpoints for reference voices
 @api_router.post("/referenceVoices/upload")
-async def upload_reference_voice(file: UploadFile = File(...), name: str = Form(...), author: str = Form(...), content: str = Form("")):
+async def upload_reference_voice(file: UploadFile = File(...), name: str = Form(...), author: str = Form(...), content: str = Form(""), model: str = Form("IndicF5")):
     """Upload a new reference voice audio file"""
     try:
         # Validate file type
@@ -737,7 +738,8 @@ async def upload_reference_voice(file: UploadFile = File(...), name: str = Form(
             "author": author,
             "content": content or f"Sample content for {name}",
             "file": filename,
-            "sample_rate": AUDIO_CONFIG["default_sample_rate"]
+            "sample_rate": AUDIO_CONFIG["default_sample_rate"],
+            "model": model,
         }
 
         # Save updated reference_voices.json

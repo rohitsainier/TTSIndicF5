@@ -9,21 +9,44 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
+# Create data/reference_voices directory if it doesn't exist
+mkdir -p data/reference_voices
+
 # Copy reference voices files if they exist and don't already exist in destination
 if [ -d "prompts" ] && [ "$(ls -A prompts 2>/dev/null)" ]; then
     echo "📁 Copying reference voices files to data/reference_voices/..."
-    for file in prompts/*.*; do
+    copied_files=0
+    skipped_files=0
+    
+    for file in prompts/*; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
             if [ ! -f "data/reference_voices/$filename" ]; then
-                cp "$file" "data/reference_voices/" 2>/dev/null || true
+                if cp "$file" "data/reference_voices/" 2>/dev/null; then
+                    echo "  ✓ Copied: $filename"
+                    copied_files=$((copied_files + 1))
+                else
+                    echo "  ✗ Failed to copy: $filename"
+                fi
+            else
+                echo "  - Skipped (already exists): $filename"
+                skipped_files=$((skipped_files + 1))
             fi
         fi
     done
+    
+    # Handle prompts.json -> reference_voices.json conversion
     if [ -f "data/reference_voices/prompts.json" ] && [ ! -f "data/reference_voices/reference_voices.json" ]; then
-        mv data/reference_voices/prompts.json data/reference_voices/reference_voices.json 2>/dev/null || true
+        if mv "data/reference_voices/prompts.json" "data/reference_voices/reference_voices.json" 2>/dev/null; then
+            echo "  ✓ Renamed prompts.json to reference_voices.json"
+        else
+            echo "  ✗ Failed to rename prompts.json to reference_voices.json"
+        fi
     fi
-    echo "✅ Reference voices files copied (skipped existing files)"
+    
+    echo "✅ Reference voices files processing completed ($copied_files copied, $skipped_files skipped)"
+else
+    echo "📁 No prompts directory found or it's empty - skipping file copy"
 fi
 
 # Check if reference_voices.json exists
