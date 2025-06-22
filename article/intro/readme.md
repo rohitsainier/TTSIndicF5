@@ -1,3 +1,5 @@
+![App Title Image](robot_talking_on_human_instructions_title_img.png)
+
 ## 🚀 Harnessing AI for Text-to-Speech: Indic Languages and English Locally
 
 ### Why Local TTS Matters
@@ -50,7 +52,8 @@ git clone https://github.com/hareeshbabu82ns/TTSIndicF5.git
   <source src="01_tts_gen_telugu.wav" type="audio/wav">
   Your browser does not support the audio element.
 </audio>
-- For this 62-word Telugu sample, my Mac Studio (M4 Max 64 GB) took 39 seconds
+
+- For this 62 word Telugu sample, my Mac Studio (M4 Max - 64 GB) took 39 seconds
 - I added language switching to make it more useful. We can mix languages in one text, like this example that starts with Telugu, switches to English, and returns to Telugu:
 
 ```
@@ -79,7 +82,7 @@ docker compose -f docker-compose-prod.yml --env-file .env.prod up -d
 - Sample `.env.prod` file:
 
 ```env
-VERSION=0.0.4
+VERSION=0.0.7
 PORT=8000
 ```
 
@@ -112,11 +115,11 @@ The web interface lets you type text, pick voices, adjust settings, and listen t
 
 ### Wrapping Up
 
-Many thanks to AI4Bharat for creating these models and making them available, and to Huggingface for hosting so many AI models that are easy to find and use.
+Huge thanks to [AI4Bharat](https://ai4bharat.iitm.ac.in/) for creating these models and making them available, and to [Hugging Face](https://huggingface.co/) for hosting so many AI models that are easy to find and use.
 
-Open-source AI now lets us run high-quality voice models on our own computers. With IndicF5, I built a flexible system that works with both English and Indian languages—with no cloud services needed, full control, and expressive voices.
+Open-source AI now lets us run high-quality voice models on our own computers. With **IndicF5**, I built a flexible system that works with both English and Indian languages—with no cloud services needed, full control, and expressive voices.
 
-I believe in using AI to boost my productivity rather than becoming dependent on it. AI is a great tool, but relying too much on it for research can limit learning opportunities. The best part of learning comes from exploring on your own and discovering new things.
+I believe in using AI to boost my productivity rather than becoming dependent on it. AI is a great tool, but relying too much on it for research can limit learning opportunities. **The best part of learning comes from exploring on your own and discovering new things**.
 
 ### Ethical Considerations
 
