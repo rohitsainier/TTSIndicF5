@@ -8,6 +8,8 @@ import threading
 import traceback
 import wave
 from importlib.resources import files
+from cached_path import cached_path
+from datetime import datetime
 
 import numpy as np
 import torch
@@ -80,11 +82,30 @@ class TTSStreamingProcessor:
             if torch.backends.mps.is_available()
             else "cpu"
         )
+        print(f"Using device: {self.device}, model: {model}, ckpt_file: {ckpt_file}")
         model_cfg = OmegaConf.load(str(files("f5_tts").joinpath(f"configs/{model}.yaml")))
         self.model_cls = get_class(f"f5_tts.model.{model_cfg.model.backbone}")
         self.model_arc = model_cfg.model.arch
         self.mel_spec_type = model_cfg.model.mel_spec.mel_spec_type
         self.sampling_rate = model_cfg.model.mel_spec.target_sample_rate
+
+        repo_name, ckpt_step, ckpt_type = "F5-TTS", 1250000, "safetensors"
+
+        # override for previous models
+        if model == "F5TTS_Base":
+            if self.mel_spec_type == "vocos":
+                ckpt_step = 1200000
+            elif self.mel_spec_type == "bigvgan":
+                model = "F5TTS_Base_bigvgan"
+                ckpt_type = "pt"
+        elif model == "E2TTS_Base":
+            repo_name = "E2-TTS"
+            ckpt_step = 1200000
+
+        if not ckpt_file:
+            ckpt_file = str(
+                cached_path(f"hf://SWivid/{repo_name}/{model}/model_{ckpt_step}.{ckpt_type}")
+            )            
 
         self.model = self.load_ema_model(ckpt_file, vocab_file, dtype)
         self.vocoder = self.load_vocoder_model()
@@ -95,6 +116,7 @@ class TTSStreamingProcessor:
         self.first_package = True
 
     def load_ema_model(self, ckpt_file, vocab_file, dtype):
+
         return load_model(
             self.model_cls,
             self.model_arc,
@@ -157,7 +179,12 @@ class TTSStreamingProcessor:
         # Reset the file writer thread
         if self.file_writer_thread is not None:
             self.file_writer_thread.stop()
-        self.file_writer_thread = AudioFileWriterThread("output.wav", self.sampling_rate)
+
+        # Generate timestamp suffix
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"data/out/tts_output_{timestamp}.wav"
+
+        self.file_writer_thread = AudioFileWriterThread(filename, self.sampling_rate)
         self.file_writer_thread.start()
 
         for audio_chunk, _ in audio_stream:
@@ -211,6 +238,8 @@ def start_server(host, port, processor):
             handle_client(conn, processor)
 
 
+# python f5_tts/socket_server.py --model="F5TTS_Base"
+# python f5_tts/socket_file_client.py --text "this is a simple test for model"
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
@@ -224,7 +253,8 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--ckpt_file",
-        default=str(hf_hub_download(repo_id="SWivid/F5-TTS", filename="F5TTS_v1_Base/model_1250000.safetensors")),
+        # default=str(hf_hub_download(repo_id="SWivid/F5-TTS", filename="F5TTS_v1_Base/model_1250000.safetensors")),
+        default="",
         help="Path to the model checkpoint file",
     )
     parser.add_argument(
@@ -240,7 +270,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--ref_text",
-        default="",
+        default="Some call me nature, others call me mother nature.",
         help="Reference audio subtitle, leave empty to auto-transcribe",
     )
 

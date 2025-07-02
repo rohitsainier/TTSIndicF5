@@ -100,6 +100,7 @@ class TTSRequest(BaseModel):
     sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
     normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
     seed: Optional[int] = Field(-1, description="Random seed for reproducible generation (-1 for random)")
+    save_to_file: Optional[bool] = Field(True, description="Whether to save the audio file to disk")
 
 class TTSBatchRequest(BaseModel):
     requests: List[TTSRequest] = Field(..., description="List of TTS requests to process")
@@ -377,11 +378,16 @@ async def text_to_speech(request: TTSRequest):
         
         end_time = datetime.now()
         duration = (end_time - start_time).total_seconds()
-        
+
+        if not request.save_to_file:
+            # delete the file path + filename if not saving to disk
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
         return TTSResponse(
             success=True,
             audio_base64=audio_base64,
-            filename=filename,
+            filename=filename if request.save_to_file else None,
             duration=duration,
             sample_rate=request.sample_rate or 24000,
             reference_voice_info=reference_voice_info,
