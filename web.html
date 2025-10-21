@@ -38,7 +38,7 @@
             }
           },
           fontFamily: {
-            'chalk': [ 'Courier New', 'monospace' ]
+            'chalk': ['Courier New', 'monospace']
           }
         }
       }
@@ -64,7 +64,6 @@
       from {
         transform: rotate(0deg);
       }
-
       to {
         transform: rotate(360deg);
       }
@@ -100,6 +99,44 @@
 
     ::-webkit-scrollbar-thumb:hover {
       background: #75c075;
+    }
+
+    /* Tab styles */
+    .tab-button {
+      transition: all 0.3s ease;
+    }
+
+    .tab-button.active {
+      background-color: #3d8b3d;
+      border-bottom: 3px solid #75c075;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* Podcast speaker chip */
+    .speaker-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: 600;
+      margin: 2px;
+    }
+
+    /* Drag and drop styles */
+    .dragging {
+      opacity: 0.5;
+    }
+
+    .drag-over {
+      border: 2px dashed #75c075 !important;
     }
   </style>
 </head>
@@ -163,206 +200,327 @@
         </div>
       </div>
 
-      <!-- Middle Column: Conversion Options -->
-      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 p-6 shadow-xl">
-        <h2 class="text-2xl font-bold chalk-text text-chalk-100 mb-6">⚙️ Text-to-Speech</h2>
-
-        <!-- Single TTS Form -->
-        <form id="singleTTSForm" class="space-y-4">
-          <div>
-            <label for="singleText" class="block text-chalk-200 font-semibold mb-2">Text to Convert:</label>
-            <textarea id="singleText" placeholder="Enter text in any Indian language..." required
-              class="w-full h-64 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none">కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.</textarea>
-          </div>
-
-          <div>
-            <label for="singleReferenceVoice" class="block text-chalk-200 font-semibold mb-2">Reference Voice:</label>
-            <select id="singleReferenceVoice" required
-              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
-              <option value="">Select a reference voice...</option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label for="singleFormat" class="block text-chalk-200 font-semibold mb-2">Format:</label>
-              <select id="singleFormat"
-                class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
-                <option value="wav">WAV</option>
-                <option value="mp3">MP3</option>
-              </select>
-            </div>
-            <div>
-              <label for="sampleRate" class="block text-chalk-200 font-semibold mb-2">Sample Rate:</label>
-              <select id="sampleRate"
-                class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
-                <option value="24000">24kHz</option>
-                <option value="22050">22kHz</option>
-                <option value="16000">16kHz</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="flex items-center">
-            <input type="checkbox" id="normalize" checked
-              class="mr-2 w-4 h-4 text-chalk-600 bg-chalkboard-700 border-chalk-600 rounded focus:ring-chalk-500">
-            <label for="normalize" class="text-chalk-200">Normalize audio</label>
-          </div>
-
-          <div>
-            <label for="seed" class="block text-chalk-200 font-semibold mb-2">Seed (for reproducible results):</label>
-            <input type="number" id="seed" value="-1" min="-1" max="2147483647" 
-              class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none"
-              placeholder="Enter seed (-1 for random)">
-            <p class="text-chalk-400 text-sm mt-1">Use -1 for random seed, or enter a number (0-2147483647) for reproducible results</p>
-          </div>
-
-          <button type="submit"
-            class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-3 px-6 rounded-md font-bold text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-            🚀 Generate Speech
+      <!-- Middle Column: Tabbed Interface -->
+      <div class="bg-chalkboard-900 rounded-lg border-2 border-chalk-600 shadow-xl overflow-hidden flex flex-col">
+        <!-- Tab Navigation -->
+        <div class="flex border-b-2 border-chalk-700">
+          <button onclick="switchTab('single')" id="singleTab"
+            class="tab-button active flex-1 px-4 py-3 text-chalk-100 font-semibold hover:bg-chalkboard-800 transition-colors duration-200">
+            🎙️ Single TTS
           </button>
-        </form>
-
-        <!-- Loading and Result -->
-        <div id="singleLoading" class="hidden mt-4 text-center py-4">
-          <div class="loading-spinner w-8 h-8 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
-          </div>
-          <span class="text-chalk-300">Generating speech... <span id="elapsedTime" class="text-chalk-400 font-mono">00m:00s</span></span>
-
-          <!-- System Stats Display -->
-          <div id="systemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
-            <h4 class="text-sm font-semibold text-chalk-200 mb-3">📊 System Usage</h4>
-            <div class="grid grid-cols-2 gap-4 text-xs">
-              <!-- CPU Usage -->
-              <div class="space-y-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-chalk-300">CPU:</span>
-                  <span id="cpuUsage" class="text-chalk-100 font-mono">--</span>
-                </div>
-                <div class="w-full bg-chalkboard-700 rounded-full h-2">
-                  <div id="cpuBar" class="bg-chalk-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
-                  </div>
-                </div>
-              </div>
-
-              <!-- Memory Usage -->
-              <div class="space-y-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-chalk-300">Memory:</span>
-                  <span id="memoryUsage" class="text-chalk-100 font-mono">--</span>
-                </div>
-                <div class="w-full bg-chalkboard-700 rounded-full h-2">
-                  <div id="memoryBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                    style="width: 0%"></div>
-                </div>
-              </div>
-
-              <!-- GPU Usage -->
-              <div class="space-y-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-chalk-300">GPU:</span>
-                  <span id="gpuUsage" class="text-chalk-100 font-mono">--</span>
-                </div>
-                <div class="w-full bg-chalkboard-700 rounded-full h-2">
-                  <div id="gpuBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%">
-                  </div>
-                </div>
-              </div>
-
-              <!-- GPU Memory -->
-              <div class="space-y-2">
-                <div class="flex justify-between items-center">
-                  <span class="text-chalk-300">GPU Mem:</span>
-                  <span id="gpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
-                </div>
-                <div class="w-full bg-chalkboard-700 rounded-full h-2">
-                  <div id="gpuMemoryBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300"
-                    style="width: 0%"></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <button onclick="switchTab('batch')" id="batchTab"
+            class="tab-button flex-1 px-4 py-3 text-chalk-100 font-semibold hover:bg-chalkboard-800 transition-colors duration-200">
+            📦 Batch
+          </button>
+          <button onclick="switchTab('podcast')" id="podcastTab"
+            class="tab-button flex-1 px-4 py-3 text-chalk-100 font-semibold hover:bg-chalkboard-800 transition-colors duration-200">
+            🎧 Podcast
+          </button>
         </div>
 
-        <div id="singleResult" class="hidden mt-4 p-4 rounded-lg"></div>
+        <!-- Tab Content Container -->
+        <div class="flex-1 overflow-y-auto p-6">
+          
+          <!-- Single TTS Tab -->
+          <div id="singleContent" class="tab-content active">
+            <h2 class="text-2xl font-bold chalk-text text-chalk-100 mb-6">⚙️ Text-to-Speech</h2>
 
-        <!-- Batch Processing -->
-        <div class="mt-8 pt-6 border-t border-chalk-700 hidden">
-          <h3 class="text-xl font-bold text-chalk-100 mb-4">📦 Batch Processing</h3>
-          <div id="batchContainer" class="space-y-3 mb-4">
-            <!-- Batch items will be added here dynamically -->
-          </div>
-          <div class="flex gap-2">
-            <button onclick="addBatchItem()"
-              class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 py-2 px-4 rounded-md transition-colors duration-200">
-              ➕ Add Item
-            </button>
-            <button onclick="processBatch()"
-              class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-4 rounded-md font-semibold transition-colors duration-200">
-              🎯 Process Batch
-            </button>
-          </div>
-          <div id="batchLoading" class="hidden mt-4 text-center py-4">
-            <div
-              class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
-            </div>
-            <span class="text-chalk-300">Processing batch... <span id="batchElapsedTime" class="text-chalk-400 font-mono">00m:00s</span></span>
+            <!-- Single TTS Form -->
+            <form id="singleTTSForm" class="space-y-4">
+              <div>
+                <label for="singleText" class="block text-chalk-200 font-semibold mb-2">Text to Convert:</label>
+                <textarea id="singleText" placeholder="Enter text in any Indian language..." required
+                  class="w-full h-64 bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none">కాకులు ఒక పొలానికి వెళ్లి అక్కడ మొక్కలన్నిటిని ధ్వంసం చేయ సాగాయి.</textarea>
+              </div>
 
-            <!-- System Stats Display for Batch -->
-            <div id="batchSystemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-3">
-              <h4 class="text-sm font-semibold text-chalk-200 mb-2">📊 System Usage</h4>
-              <div class="grid grid-cols-2 gap-3 text-xs">
-                <!-- CPU Usage -->
-                <div class="space-y-1">
-                  <div class="flex justify-between items-center">
-                    <span class="text-chalk-300">CPU:</span>
-                    <span id="batchCpuUsage" class="text-chalk-100 font-mono">--</span>
-                  </div>
-                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
-                    <div id="batchCpuBar" class="bg-chalk-500 h-1.5 rounded-full transition-all duration-300"
-                      style="width: 0%"></div>
-                  </div>
+              <div>
+                <label for="singleReferenceVoice" class="block text-chalk-200 font-semibold mb-2">Reference Voice:</label>
+                <select id="singleReferenceVoice" required
+                  class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+                  <option value="">Select a reference voice...</option>
+                </select>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label for="singleFormat" class="block text-chalk-200 font-semibold mb-2">Format:</label>
+                  <select id="singleFormat"
+                    class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+                    <option value="wav">WAV</option>
+                    <option value="mp3">MP3</option>
+                  </select>
                 </div>
-
-                <!-- Memory Usage -->
-                <div class="space-y-1">
-                  <div class="flex justify-between items-center">
-                    <span class="text-chalk-300">Memory:</span>
-                    <span id="batchMemoryUsage" class="text-chalk-100 font-mono">--</span>
-                  </div>
-                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
-                    <div id="batchMemoryBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                      style="width: 0%"></div>
-                  </div>
+                <div>
+                  <label for="sampleRate" class="block text-chalk-200 font-semibold mb-2">Sample Rate:</label>
+                  <select id="sampleRate"
+                    class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none">
+                    <option value="24000">24kHz</option>
+                    <option value="22050">22kHz</option>
+                    <option value="16000">16kHz</option>
+                  </select>
                 </div>
+              </div>
 
-                <!-- GPU Usage -->
-                <div class="space-y-1">
-                  <div class="flex justify-between items-center">
-                    <span class="text-chalk-300">GPU:</span>
-                    <span id="batchGpuUsage" class="text-chalk-100 font-mono">--</span>
-                  </div>
-                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
-                    <div id="batchGpuBar" class="bg-green-500 h-1.5 rounded-full transition-all duration-300"
-                      style="width: 0%"></div>
-                  </div>
-                </div>
+              <div class="flex items-center">
+                <input type="checkbox" id="normalize" checked
+                  class="mr-2 w-4 h-4 text-chalk-600 bg-chalkboard-700 border-chalk-600 rounded focus:ring-chalk-500">
+                <label for="normalize" class="text-chalk-200">Normalize audio</label>
+              </div>
 
-                <!-- GPU Memory -->
-                <div class="space-y-1">
-                  <div class="flex justify-between items-center">
-                    <span class="text-chalk-300">GPU Mem:</span>
-                    <span id="batchGpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+              <div>
+                <label for="seed" class="block text-chalk-200 font-semibold mb-2">Seed (for reproducible results):</label>
+                <input type="number" id="seed" value="-1" min="-1" max="2147483647" 
+                  class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-3 focus:border-chalk-500 focus:outline-none"
+                  placeholder="Enter seed (-1 for random)">
+                <p class="text-chalk-400 text-sm mt-1">Use -1 for random seed, or enter a number (0-2147483647) for reproducible results</p>
+              </div>
+
+              <button type="submit"
+                class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-3 px-6 rounded-md font-bold text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                🚀 Generate Speech
+              </button>
+            </form>
+
+            <!-- Loading and Result -->
+            <div id="singleLoading" class="hidden mt-4 text-center py-4">
+              <div class="loading-spinner w-8 h-8 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2">
+              </div>
+              <span class="text-chalk-300">Generating speech... <span id="elapsedTime" class="text-chalk-400 font-mono">00m:00s</span></span>
+
+              <!-- System Stats Display -->
+              <div id="systemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-chalk-200 mb-3">📊 System Usage</h4>
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">CPU:</span>
+                      <span id="cpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="cpuBar" class="bg-chalk-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
                   </div>
-                  <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
-                    <div id="batchGpuMemoryBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300"
-                      style="width: 0%"></div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">Memory:</span>
+                      <span id="memoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="memoryBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU:</span>
+                      <span id="gpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="gpuBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU Mem:</span>
+                      <span id="gpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="gpuMemoryBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
+
+            <div id="singleResult" class="hidden mt-4 p-4 rounded-lg"></div>
           </div>
-          <div id="batchResult" class="hidden mt-4"></div>
+
+          <!-- Batch Processing Tab -->
+          <div id="batchContent" class="tab-content">
+            <h2 class="text-2xl font-bold chalk-text text-chalk-100 mb-6">📦 Batch Processing</h2>
+            
+            <div id="batchContainer" class="space-y-3 mb-4">
+              <!-- Batch items will be added here dynamically -->
+            </div>
+            
+            <div class="flex gap-2 mb-4">
+              <button onclick="addBatchItem()"
+                class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 py-2 px-4 rounded-md transition-colors duration-200">
+                ➕ Add Item
+              </button>
+              <button onclick="processBatch()"
+                class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-2 px-4 rounded-md font-semibold transition-colors duration-200">
+                🎯 Process Batch
+              </button>
+            </div>
+            
+            <div id="batchLoading" class="hidden mt-4 text-center py-4">
+              <div class="loading-spinner w-6 h-6 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <span class="text-chalk-300">Processing batch... <span id="batchElapsedTime" class="text-chalk-400 font-mono">00m:00s</span></span>
+
+              <!-- System Stats Display for Batch -->
+              <div id="batchSystemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-3">
+                <h4 class="text-sm font-semibold text-chalk-200 mb-2">📊 System Usage</h4>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                  <div class="space-y-1">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">CPU:</span>
+                      <span id="batchCpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                      <div id="batchCpuBar" class="bg-chalk-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">Memory:</span>
+                      <span id="batchMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                      <div id="batchMemoryBar" class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU:</span>
+                      <span id="batchGpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                      <div id="batchGpuBar" class="bg-green-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-1">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU Mem:</span>
+                      <span id="batchGpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-1.5">
+                      <div id="batchGpuMemoryBar" class="bg-purple-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div id="batchResult" class="hidden mt-4"></div>
+          </div>
+
+          <!-- Podcast Creator Tab -->
+          <div id="podcastContent" class="tab-content">
+            <h2 class="text-2xl font-bold chalk-text text-chalk-100 mb-6">🎧 Podcast Creator</h2>
+
+            <!-- Podcast Settings -->
+            <div class="mb-6 p-4 bg-chalkboard-800 rounded-lg border border-chalk-700">
+              <h3 class="text-lg font-semibold text-chalk-200 mb-3">📝 Podcast Settings</h3>
+              <div class="space-y-3">
+                <input type="text" id="podcastTitle" placeholder="Podcast Episode Title..."
+                  class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 placeholder-chalk-400 focus:border-chalk-500 focus:outline-none">
+                
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-chalk-200 text-sm mb-1">Pause Between Segments (ms)</label>
+                    <input type="number" id="podcastPauseDuration" value="500" min="0" max="5000"
+                      class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 focus:border-chalk-500 focus:outline-none">
+                  </div>
+                  <div>
+                    <label class="block text-chalk-200 text-sm mb-1">Output Format</label>
+                    <select id="podcastFormat"
+                      class="w-full bg-chalkboard-700 border border-chalk-600 text-chalk-100 rounded-md p-2 focus:border-chalk-500 focus:outline-none">
+                      <option value="wav">WAV</option>
+                      <option value="mp3">MP3</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Speakers Management -->
+            <div class="mb-6 p-4 bg-chalkboard-800 rounded-lg border border-chalk-700">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-semibold text-chalk-200">👥 Speakers</h3>
+                <button onclick="addPodcastSpeaker()"
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md text-sm transition-colors duration-200">
+                  ➕ Add Speaker
+                </button>
+              </div>
+              
+              <div id="podcastSpeakers" class="space-y-2">
+                <!-- Speakers will be added here -->
+              </div>
+            </div>
+
+            <!-- Script Editor -->
+            <div class="mb-6 p-4 bg-chalkboard-800 rounded-lg border border-chalk-700">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="text-lg font-semibold text-chalk-200">📜 Script</h3>
+                <button onclick="addPodcastSegment()"
+                  class="bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-3 py-1 rounded-md text-sm transition-colors duration-200">
+                  ➕ Add Segment
+                </button>
+              </div>
+              
+              <div id="podcastScript" class="space-y-3 max-h-96 overflow-y-auto">
+                <!-- Script segments will be added here -->
+              </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button onclick="generatePodcast()"
+              class="w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 py-3 px-6 rounded-md font-bold text-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+              🎬 Generate Podcast
+            </button>
+
+            <!-- Loading and Result -->
+            <div id="podcastLoading" class="hidden mt-4 text-center py-4">
+              <div class="loading-spinner w-8 h-8 border-2 border-chalk-300 border-t-transparent rounded-full mx-auto mb-2"></div>
+              <span class="text-chalk-300">Generating podcast... <span id="podcastElapsedTime" class="text-chalk-400 font-mono">00m:00s</span></span>
+
+              <!-- System Stats Display -->
+              <div id="podcastSystemStats" class="mt-4 bg-chalkboard-800 border border-chalk-700 rounded-lg p-4">
+                <h4 class="text-sm font-semibold text-chalk-200 mb-3">📊 System Usage</h4>
+                <div class="grid grid-cols-2 gap-4 text-xs">
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">CPU:</span>
+                      <span id="podcastCpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="podcastCpuBar" class="bg-chalk-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">Memory:</span>
+                      <span id="podcastMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="podcastMemoryBar" class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU:</span>
+                      <span id="podcastGpuUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="podcastGpuBar" class="bg-green-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                      <span class="text-chalk-300">GPU Mem:</span>
+                      <span id="podcastGpuMemoryUsage" class="text-chalk-100 font-mono">--</span>
+                    </div>
+                    <div class="w-full bg-chalkboard-700 rounded-full h-2">
+                      <div id="podcastGpuMemoryBar" class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div id="podcastResult" class="hidden mt-4 p-4 rounded-lg"></div>
+          </div>
+
         </div>
       </div>
 
@@ -392,12 +550,12 @@
             </div>
             <div class="flex justify-between">
               <span>Storage Used:</span>
-              <span id="storageUsed">0 MB</span>        </div>
+              <span id="storageUsed">0 MB</span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
-      </div>
-    </div>
-
   </main>
 
   <!-- API Status - Top Right Corner -->
@@ -408,12 +566,18 @@
     </div>
   </div>
 
-  <script>    const API_BASE = '/api';
+  <script>
+    const API_BASE = '/api';
     let availableReferenceVoices = {};
     
     // Timer variables
     let startTime = null;
     let timerInterval = null;
+
+    // Podcast state
+    let podcastSpeakers = [];
+    let podcastSegments = [];
+    let speakerColors = ['bg-blue-600', 'bg-green-600', 'bg-purple-600', 'bg-pink-600', 'bg-yellow-600', 'bg-red-600', 'bg-indigo-600'];
 
     // Helper function to format time in mm:ss format
     function formatTime(seconds) {
@@ -422,53 +586,420 @@
       return `${minutes.toString().padStart(2, '0')}m:${remainingSeconds.toString().padStart(2, '0')}s`;
     }
 
+    // Tab switching function
+    function switchTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-button').forEach(button => {
+        button.classList.remove('active');
+      });
+
+      // Show selected tab
+      document.getElementById(`${tabName}Content`).classList.add('active');
+      document.getElementById(`${tabName}Tab`).classList.add('active');
+
+      // Initialize podcast UI if switching to podcast tab
+      if (tabName === 'podcast' && podcastSpeakers.length === 0) {
+        initializePodcast();
+      }
+    }
+
+    // Initialize podcast with default speakers
+    function initializePodcast() {
+      // Add default speakers
+      addPodcastSpeaker();
+      addPodcastSpeaker();
+      
+      // Add first segment
+      addPodcastSegment();
+    }
+
+    // Add a speaker to the podcast
+    function addPodcastSpeaker() {
+      const speakerIndex = podcastSpeakers.length;
+      const speakerColor = speakerColors[speakerIndex % speakerColors.length];
+      
+      const speaker = {
+        id: `speaker_${Date.now()}_${speakerIndex}`,
+        name: `Speaker ${speakerIndex + 1}`,
+        referenceVoiceKey: '',
+        color: speakerColor
+      };
+      
+      podcastSpeakers.push(speaker);
+      renderPodcastSpeakers();
+    }
+
+    // Remove a speaker
+    function removePodcastSpeaker(speakerId) {
+      if (podcastSpeakers.length <= 1) {
+        alert('You must have at least one speaker!');
+        return;
+      }
+      
+      podcastSpeakers = podcastSpeakers.filter(s => s.id !== speakerId);
+      
+      // Remove segments with this speaker
+      podcastSegments = podcastSegments.filter(seg => seg.speakerId !== speakerId);
+      
+      renderPodcastSpeakers();
+      renderPodcastScript();
+    }
+
+    // Render speakers list
+    function renderPodcastSpeakers() {
+      const container = document.getElementById('podcastSpeakers');
+      
+      if (podcastSpeakers.length === 0) {
+        container.innerHTML = '<p class="text-chalk-400 text-sm">No speakers added yet.</p>';
+        return;
+      }
+      
+      container.innerHTML = podcastSpeakers.map(speaker => `
+        <div class="flex items-center gap-2 bg-chalkboard-700 border border-chalk-600 rounded-md p-3">
+          <div class="w-3 h-3 rounded-full ${speaker.color}"></div>
+          <input type="text" value="${speaker.name}" 
+            onchange="updateSpeakerName('${speaker.id}', this.value)"
+            class="flex-1 bg-chalkboard-800 border border-chalk-600 text-chalk-100 rounded px-2 py-1 text-sm focus:border-chalk-500 focus:outline-none">
+          <select onchange="updateSpeakerVoice('${speaker.id}', this.value)"
+            class="flex-1 bg-chalkboard-800 border border-chalk-600 text-chalk-100 rounded px-2 py-1 text-sm focus:border-chalk-500 focus:outline-none">
+            <option value="">Select voice...</option>
+            ${Object.entries(availableReferenceVoices).map(([key, voice]) => 
+              `<option value="${key}" ${speaker.referenceVoiceKey === key ? 'selected' : ''}>${key} - ${voice.author}</option>`
+            ).join('')}
+          </select>
+          <button onclick="removePodcastSpeaker('${speaker.id}')" 
+            class="text-red-400 hover:text-red-300 px-2" title="Remove speaker">
+            🗑️
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // Update speaker name
+    function updateSpeakerName(speakerId, name) {
+      const speaker = podcastSpeakers.find(s => s.id === speakerId);
+      if (speaker) {
+        speaker.name = name;
+        renderPodcastScript(); // Update script view
+      }
+    }
+
+    // Update speaker voice
+    function updateSpeakerVoice(speakerId, voiceKey) {
+      const speaker = podcastSpeakers.find(s => s.id === speakerId);
+      if (speaker) {
+        speaker.referenceVoiceKey = voiceKey;
+      }
+    }
+
+    // Add a script segment
+    function addPodcastSegment() {
+      const segment = {
+        id: `segment_${Date.now()}`,
+        speakerId: podcastSpeakers.length > 0 ? podcastSpeakers[0].id : '',
+        text: '',
+        pauseAfter: 300
+      };
+      
+      podcastSegments.push(segment);
+      renderPodcastScript();
+    }
+
+    // Remove a segment
+    function removePodcastSegment(segmentId) {
+      podcastSegments = podcastSegments.filter(s => s.id !== segmentId);
+      renderPodcastScript();
+    }
+
+    // Move segment up
+    function moveSegmentUp(segmentId) {
+      const index = podcastSegments.findIndex(s => s.id === segmentId);
+      if (index > 0) {
+        [podcastSegments[index], podcastSegments[index - 1]] = [podcastSegments[index - 1], podcastSegments[index]];
+        renderPodcastScript();
+      }
+    }
+
+    // Move segment down
+    function moveSegmentDown(segmentId) {
+      const index = podcastSegments.findIndex(s => s.id === segmentId);
+      if (index < podcastSegments.length - 1) {
+        [podcastSegments[index], podcastSegments[index + 1]] = [podcastSegments[index + 1], podcastSegments[index]];
+        renderPodcastScript();
+      }
+    }
+
+    // Update segment speaker
+    function updateSegmentSpeaker(segmentId, speakerId) {
+      const segment = podcastSegments.find(s => s.id === segmentId);
+      if (segment) {
+        segment.speakerId = speakerId;
+        renderPodcastScript();
+      }
+    }
+
+    // Update segment text
+    function updateSegmentText(segmentId, text) {
+      const segment = podcastSegments.find(s => s.id === segmentId);
+      if (segment) {
+        segment.text = text;
+      }
+    }
+
+    // Update segment pause
+    function updateSegmentPause(segmentId, pause) {
+      const segment = podcastSegments.find(s => s.id === segmentId);
+      if (segment) {
+        segment.pauseAfter = parseInt(pause) || 0;
+      }
+    }
+
+    // Render script segments
+    function renderPodcastScript() {
+      const container = document.getElementById('podcastScript');
+      
+      if (podcastSegments.length === 0) {
+        container.innerHTML = '<p class="text-chalk-400 text-sm">No script segments yet. Add some to start building your podcast!</p>';
+        return;
+      }
+      
+      container.innerHTML = podcastSegments.map((segment, index) => {
+        const speaker = podcastSpeakers.find(s => s.id === segment.speakerId);
+        const speakerColor = speaker ? speaker.color : 'bg-gray-600';
+        
+        return `
+          <div class="bg-chalkboard-700 border border-chalk-600 rounded-lg p-3">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-chalk-400 text-sm font-mono">#${index + 1}</span>
+                <div class="w-3 h-3 rounded-full ${speakerColor}"></div>
+                <select onchange="updateSegmentSpeaker('${segment.id}', this.value)"
+                  class="bg-chalkboard-800 border border-chalk-600 text-chalk-100 rounded px-2 py-1 text-sm focus:border-chalk-500 focus:outline-none">
+                  ${podcastSpeakers.map(s => 
+                    `<option value="${s.id}" ${segment.speakerId === s.id ? 'selected' : ''}>${s.name}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <div class="flex items-center gap-1">
+                <button onclick="moveSegmentUp('${segment.id}')" 
+                  class="text-chalk-400 hover:text-chalk-200 px-1 text-sm" title="Move up">
+                  ⬆️
+                </button>
+                <button onclick="moveSegmentDown('${segment.id}')" 
+                  class="text-chalk-400 hover:text-chalk-200 px-1 text-sm" title="Move down">
+                  ⬇️
+                </button>
+                <button onclick="removePodcastSegment('${segment.id}')" 
+                  class="text-red-400 hover:text-red-300 px-1 text-sm" title="Remove">
+                  🗑️
+                </button>
+              </div>
+            </div>
+            <textarea onchange="updateSegmentText('${segment.id}', this.value)"
+              placeholder="Enter dialogue for ${speaker ? speaker.name : 'speaker'}..."
+              class="w-full h-20 bg-chalkboard-800 border border-chalk-600 text-chalk-100 rounded-md p-2 text-sm placeholder-chalk-400 focus:border-chalk-500 focus:outline-none resize-none">${segment.text}</textarea>
+            <div class="mt-2 flex items-center gap-2">
+              <label class="text-chalk-400 text-xs">Pause after (ms):</label>
+              <input type="number" value="${segment.pauseAfter}" min="0" max="5000" step="50"
+                onchange="updateSegmentPause('${segment.id}', this.value)"
+                class="w-24 bg-chalkboard-800 border border-chalk-600 text-chalk-100 rounded px-2 py-1 text-sm focus:border-chalk-500 focus:outline-none">
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Podcast timer functions
+    let podcastStartTime = null;
+    let podcastTimerInterval = null;
+
+    function startPodcastTimer() {
+      podcastStartTime = Date.now();
+      const elapsedTimeElement = document.getElementById('podcastElapsedTime');
+      
+      podcastTimerInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - podcastStartTime) / 1000);
+        elapsedTimeElement.textContent = formatTime(elapsed);
+      }, 1000);
+    }
+
+    function stopPodcastTimer() {
+      if (podcastTimerInterval) {
+        clearInterval(podcastTimerInterval);
+        podcastTimerInterval = null;
+      }
+    }
+
+    // Generate podcast
+    async function generatePodcast() {
+      const title = document.getElementById('podcastTitle').value || 'Untitled Podcast';
+      const pauseDuration = parseInt(document.getElementById('podcastPauseDuration').value) || 500;
+      const format = document.getElementById('podcastFormat').value;
+
+      // Validate
+      if (podcastSpeakers.length === 0) {
+        alert('Please add at least one speaker!');
+        return;
+      }
+
+      if (podcastSegments.length === 0) {
+        alert('Please add at least one script segment!');
+        return;
+      }
+
+      // Check all speakers have voices
+      const speakersWithoutVoice = podcastSpeakers.filter(s => !s.referenceVoiceKey);
+      if (speakersWithoutVoice.length > 0) {
+        alert(`Please select reference voices for all speakers! Missing: ${speakersWithoutVoice.map(s => s.name).join(', ')}`);
+        return;
+      }
+
+      // Check all segments have text
+      const emptySegments = podcastSegments.filter(s => !s.text.trim());
+      if (emptySegments.length > 0) {
+        alert('Please fill in text for all script segments!');
+        return;
+      }
+
+      const resultDiv = document.getElementById('podcastResult');
+      const loadingDiv = document.getElementById('podcastLoading');
+
+      resultDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+
+      // Start timer and monitoring
+      startPodcastTimer();
+      startSystemMonitoring('podcast');
+
+      try {
+        // Prepare podcast data
+        const podcastData = {
+          title: title,
+          speakers: podcastSpeakers.map(s => ({
+            id: s.id,
+            name: s.name,
+            reference_voice_key: s.referenceVoiceKey
+          })),
+          segments: podcastSegments.map(s => ({
+            speaker_id: s.speakerId,
+            text: s.text,
+            pause_after: s.pauseAfter
+          })),
+          pause_duration: pauseDuration,
+          output_format: format,
+          sample_rate: 24000,
+          normalize: true
+        };
+
+        const response = await fetch(`${API_BASE}/podcast/generate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(podcastData)
+        });
+
+        const data = await response.json();
+
+        stopPodcastTimer();
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+
+        if (response.ok && data.success) {
+          resultDiv.className = 'block mt-4 p-4 rounded-lg bg-green-800 border border-green-600';
+          resultDiv.innerHTML = `
+            <div class="text-green-200">
+              <div class="flex items-center mb-2">
+                <span class="mr-2">✅</span>
+                <span class="font-semibold">Podcast generated successfully!</span>
+              </div>
+              <div class="text-sm space-y-1 mb-3">
+                <div>Title: ${data.title}</div>
+                <div>Segments: ${data.segments_count}</div>
+                <div>Duration: ${formatTime(Math.floor(data.duration))}</div>
+                <div>Filename: ${data.filename}</div>
+              </div>
+              <audio controls class="w-full mt-3 h-10" style="filter: hue-rotate(90deg);">
+                <source src="data:audio/${format};base64,${data.audio_base64}" type="audio/${format}">
+                Your browser does not support the audio element.
+              </audio>
+              <button onclick="downloadFileFromServer('${data.filename}')" 
+                class="mt-3 w-full bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-4 py-2 rounded-md">
+                📥 Download Podcast
+              </button>
+            </div>
+          `;
+          resultDiv.style.display = 'block';
+          loadGeneratedFiles();
+        } else {
+          resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+          resultDiv.innerHTML = `
+            <div class="text-red-200">
+              <span class="mr-2">❌</span>
+              <span>Error: ${data.detail || data.message || 'Unknown error'}</span>
+            </div>
+          `;
+          resultDiv.style.display = 'block';
+        }
+
+      } catch (error) {
+        stopPodcastTimer();
+        stopSystemMonitoring();
+
+        loadingDiv.style.display = 'none';
+        resultDiv.className = 'block mt-4 p-4 rounded-lg bg-red-800 border border-red-600';
+        resultDiv.innerHTML = `
+          <div class="text-red-200">
+            <span class="mr-2">❌</span>
+            <span>Network error: ${error.message}</span>
+          </div>
+        `;
+        resultDiv.style.display = 'block';
+      }
+    }
+
     // Initialize the page
-    document.addEventListener( 'DOMContentLoaded', function () {
+    document.addEventListener('DOMContentLoaded', function() {
       checkHealth();
       loadReferenceVoices();
       loadGeneratedFiles();
       addBatchItem(); // Add initial batch item
 
       // Setup single TTS form
-      document.getElementById( 'singleTTSForm' ).addEventListener( 'submit', function ( e ) {
+      document.getElementById('singleTTSForm').addEventListener('submit', function(e) {
         e.preventDefault();
         generateSingleTTS();
-      } );
+      });
 
       // Setup file selection handler for reference voice
-      document.getElementById( 'referenceVoiceFile' ).addEventListener( 'change', function ( e ) {
+      document.getElementById('referenceVoiceFile').addEventListener('change', function(e) {
         const file = e.target.files[0];
-        if ( file ) {
-          const uniqueName = generateUniqueReferenceVoiceName( file.name );
-          document.getElementById( 'referenceVoiceName' ).value = uniqueName;
+        if (file) {
+          const uniqueName = generateUniqueReferenceVoiceName(file.name);
+          document.getElementById('referenceVoiceName').value = uniqueName;
         }
-      } );
-    } );
+      });
+    });
 
     // Function to generate unique reference voice name
-    function generateUniqueReferenceVoiceName( filename ) {
-      // Remove file extension
-      let baseName = filename.replace( /\.[^/.]+$/, '' );
+    function generateUniqueReferenceVoiceName(filename) {
+      let baseName = filename.replace(/\.[^/.]+$/, '');
+      baseName = baseName.replace(/[^a-zA-Z0-9\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/g, '_');
+      baseName = baseName.replace(/_+/g, '_');
+      baseName = baseName.replace(/^_+|_+$/g, '');
       
-      // Remove special characters and spaces, replace with underscores
-      baseName = baseName.replace( /[^a-zA-Z0-9\u0900-\u097F\u0980-\u09FF\u0A00-\u0A7F\u0A80-\u0AFF\u0B00-\u0B7F\u0B80-\u0BFF\u0C00-\u0C7F\u0C80-\u0CFF\u0D00-\u0D7F]/g, '_' );
-      
-      // Remove multiple consecutive underscores
-      baseName = baseName.replace( /_+/g, '_' );
-      
-      // Remove leading/trailing underscores
-      baseName = baseName.replace( /^_+|_+$/g, '' );
-      
-      // Ensure it's not empty
-      if ( !baseName ) {
+      if (!baseName) {
         baseName = 'voice';
       }
       
-      // Check if name already exists and add suffix if needed
       let uniqueName = baseName;
       let counter = 1;
       
-      while ( availableReferenceVoices.hasOwnProperty( uniqueName ) ) {
+      while (availableReferenceVoices.hasOwnProperty(uniqueName)) {
         uniqueName = `${baseName}_${counter}`;
         counter++;
       }
@@ -516,13 +1047,13 @@
     }
 
     async function checkHealth() {
-      const statusDiv = document.getElementById( 'apiStatus' );
+      const statusDiv = document.getElementById('apiStatus');
 
       try {
-        const response = await fetch( `${API_BASE}/health` );
+        const response = await fetch(`${API_BASE}/health`);
         const data = await response.json();
 
-        if ( response.ok && data.status === 'healthy' ) {
+        if (response.ok && data.status === 'healthy') {
           statusDiv.className = 'fixed top-4 right-4 p-2 rounded-lg shadow-lg bg-green-800 border border-green-600 z-50';
           statusDiv.innerHTML = `
             <div class="flex items-center text-green-200">
@@ -539,8 +1070,8 @@
             </div>
           `;
         }
-      } catch ( error ) {
-        statusDiv.className = 'fixed bottom-4 right-4 p-2 rounded-lg shadow-lg bg-red-800 border border-red-600 z-50';
+      } catch (error) {
+        statusDiv.className = 'fixed top-4 right-4 p-2 rounded-lg shadow-lg bg-red-800 border border-red-600 z-50';
         statusDiv.innerHTML = `
           <div class="flex items-center text-red-200">
             <span class="mr-1 text-xs">❌</span>
@@ -551,7 +1082,7 @@
     }
 
     async function loadReferenceVoices() {
-      const referenceVoicesDiv = document.getElementById( 'referenceVoicesList' );
+      const referenceVoicesDiv = document.getElementById('referenceVoicesList');
 
       referenceVoicesDiv.innerHTML = `
         <div class="flex items-center justify-center py-8">
@@ -561,16 +1092,15 @@
       `;
 
       try {
-        const response = await fetch( `${API_BASE}/referenceVoices` );
+        const response = await fetch(`${API_BASE}/referenceVoices`);
         const data = await response.json();
 
         availableReferenceVoices = data.reference_voices;
 
-        // Update referenceVoices display
         let referenceVoicesHtml = '';
-        for ( const [ key, referenceVoices ] of Object.entries( data.reference_voices ) ) {
+        for (const [key, referenceVoices] of Object.entries(data.reference_voices)) {
           referenceVoicesHtml += `
-            <div class="referenceVoices-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
+            <div class="reference-voice-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
               <div class="flex items-center justify-between mb-2">
                 <h4 class="font-semibold text-chalk-100">${key}</h4>
                 <button onclick="deleteReferenceVoice('${key}')" class="text-red-400 hover:text-red-300 text-sm">
@@ -579,7 +1109,7 @@
               </div>
               <p class="text-chalk-300 text-sm mb-2">by ${referenceVoices.author}</p>
               <p class="text-chalk-400 text-xs mb-2">Model: ${referenceVoices.model || 'IndicF5'}</p>
-              <p class="text-chalk-400 text-xs mb-3">${referenceVoices.content.substring( 0, 80 )}...</p>
+              <p class="text-chalk-400 text-xs mb-3">${referenceVoices.content.substring(0, 80)}...</p>
               <audio controls class="w-full h-8" style="filter: hue-rotate(90deg);">
                 <source src="${API_BASE}/referenceVoices/${key}/audio" type="audio/wav">
               </audio>
@@ -589,145 +1119,146 @@
 
         referenceVoicesDiv.innerHTML = referenceVoicesHtml || '<div class="text-center text-chalk-400 py-8">No voices available</div>';
 
-        // Update select options
         updateReferenceVoicesSelects();
 
-      } catch ( error ) {
+      } catch (error) {
         referenceVoicesDiv.innerHTML = '<div class="text-center text-red-400 py-8">❌ Failed to load voices</div>';
       }
     }
 
     function updateReferenceVoicesSelects() {
-      const selects = document.querySelectorAll( '#singleReferenceVoice, .batch-reference-voice' );
-      selects.forEach( select => {
+      const selects = document.querySelectorAll('#singleReferenceVoice, .batch-reference-voice');
+      selects.forEach(select => {
         const currentValue = select.value;
         select.innerHTML = '<option value="">Select a reference voice...</option>';
 
-        for ( const [ key, referenceVoices ] of Object.entries( availableReferenceVoices ) ) {
-          const option = document.createElement( 'option' );
+        for (const [key, referenceVoices] of Object.entries(availableReferenceVoices)) {
+          const option = document.createElement('option');
           option.value = key;
           option.textContent = `${key} - ${referenceVoices.author} (${referenceVoices.model || 'IndicF5'})`;
-          select.appendChild( option );
+          select.appendChild(option);
         }
 
-        if ( currentValue && availableReferenceVoices[ currentValue ] ) {
+        if (currentValue && availableReferenceVoices[currentValue]) {
           select.value = currentValue;
-        } else if ( select.id === 'singleReferenceVoice' && !select.value && Object.keys( availableReferenceVoices ).length > 0 ) {
-          // Auto-select first item for singleReferenceVoice if not already selected and has items
-          const firstKey = Object.keys( availableReferenceVoices )[0];
+        } else if (select.id === 'singleReferenceVoice' && !select.value && Object.keys(availableReferenceVoices).length > 0) {
+          const firstKey = Object.keys(availableReferenceVoices)[0];
           select.value = firstKey;
         }
-      } );
+      });
+
+      // Update podcast speakers if on podcast tab
+      if (podcastSpeakers.length > 0) {
+        renderPodcastSpeakers();
+      }
     }
 
     async function uploadReferenceVoices() {
-      const fileInput = document.getElementById( 'referenceVoiceFile' );
-      const nameInput = document.getElementById( 'referenceVoiceName' );
-      const authorInput = document.getElementById( 'referenceVoiceAuthor' );
-      const modelInput = document.getElementById( 'referenceVoiceModel' );
-      const contentInput = document.getElementById( 'referenceVoiceContent' );
+      const fileInput = document.getElementById('referenceVoiceFile');
+      const nameInput = document.getElementById('referenceVoiceName');
+      const authorInput = document.getElementById('referenceVoiceAuthor');
+      const modelInput = document.getElementById('referenceVoiceModel');
+      const contentInput = document.getElementById('referenceVoiceContent');
 
-      if ( !fileInput.files[ 0 ] || !nameInput.value || !authorInput.value || !contentInput.value ) {
-        alert( 'Please fill all fields and select an audio file' );
+      if (!fileInput.files[0] || !nameInput.value || !authorInput.value || !contentInput.value) {
+        alert('Please fill all fields and select an audio file');
         return;
       }
 
       const formData = new FormData();
-      formData.append( 'file', fileInput.files[ 0 ] );
-      formData.append( 'name', nameInput.value );
-      formData.append( 'author', authorInput.value );
-      formData.append( 'model', modelInput.value );
-      formData.append( 'content', contentInput.value );
+      formData.append('file', fileInput.files[0]);
+      formData.append('name', nameInput.value);
+      formData.append('author', authorInput.value);
+      formData.append('model', modelInput.value);
+      formData.append('content', contentInput.value);
 
       try {
-        const response = await fetch( `${API_BASE}/referenceVoices/upload`, {
+        const response = await fetch(`${API_BASE}/referenceVoices/upload`, {
           method: 'POST',
           body: formData
-        } );
+        });
 
         const data = await response.json();
-        if ( response.ok && data.success ) {
-          alert( data.message );
+        if (response.ok && data.success) {
+          alert(data.message);
           fileInput.value = '';
           nameInput.value = '';
           authorInput.value = '';
-          modelInput.value = 'IndicF5'; // Reset to default
+          modelInput.value = 'IndicF5';
           contentInput.value = '';
           loadReferenceVoices();
         } else {
-          alert( `Failed to upload referenceVoice: ${data.detail || 'Unknown error'}` );
+          alert(`Failed to upload reference voice: ${data.detail || 'Unknown error'}`);
         }
-      } catch ( error ) {
-        alert( 'Error uploading referenceVoice: ' + error.message );
+      } catch (error) {
+        alert('Error uploading reference voice: ' + error.message);
       }
     }
 
-    async function deleteReferenceVoice( referenceVoiceKey ) {
-      if ( !confirm( `Are you sure you want to delete "${referenceVoiceKey}"?` ) ) return;
+    async function deleteReferenceVoice(referenceVoiceKey) {
+      if (!confirm(`Are you sure you want to delete "${referenceVoiceKey}"?`)) return;
 
       try {
-        const response = await fetch( `${API_BASE}/referenceVoices/${referenceVoiceKey}`, {
+        const response = await fetch(`${API_BASE}/referenceVoices/${referenceVoiceKey}`, {
           method: 'DELETE'
-        } );
+        });
 
         const data = await response.json();
-        if ( response.ok && data.success ) {
-          alert( data.message );
+        if (response.ok && data.success) {
+          alert(data.message);
           loadReferenceVoices();
         } else {
-          alert( `Failed to delete referenceVoice: ${data.detail || 'Unknown error'}` );
+          alert(`Failed to delete reference voice: ${data.detail || 'Unknown error'}`);
         }
-      } catch ( error ) {
-        alert( 'Error deleting referenceVoice: ' + error.message );
+      } catch (error) {
+        alert('Error deleting reference voice: ' + error.message);
       }
     }
 
     async function generateSingleTTS() {
-      const text = document.getElementById( 'singleText' ).value;
-      const referenceVoiceKey = document.getElementById( 'singleReferenceVoice' ).value;
-      const format = document.getElementById( 'singleFormat' ).value;
-      const sampleRate = parseInt( document.getElementById( 'sampleRate' ).value );
-      const normalize = document.getElementById( 'normalize' ).checked;
-      const seed = parseInt( document.getElementById( 'seed' ).value );
+      const text = document.getElementById('singleText').value;
+      const referenceVoiceKey = document.getElementById('singleReferenceVoice').value;
+      const format = document.getElementById('singleFormat').value;
+      const sampleRate = parseInt(document.getElementById('sampleRate').value);
+      const normalize = document.getElementById('normalize').checked;
+      const seed = parseInt(document.getElementById('seed').value);
 
-      const resultDiv = document.getElementById( 'singleResult' );
-      const loadingDiv = document.getElementById( 'singleLoading' );
-      const submitBtn = document.querySelector( '#singleTTSForm button[type="submit"]' );
+      const resultDiv = document.getElementById('singleResult');
+      const loadingDiv = document.getElementById('singleLoading');
+      const submitBtn = document.querySelector('#singleTTSForm button[type="submit"]');
 
       resultDiv.style.display = 'none';
       loadingDiv.style.display = 'block';
       submitBtn.disabled = true;
 
-      // Start timer and system monitoring
       startTimer();
       startSystemMonitoring();
 
       try {
-        const response = await fetch( `${API_BASE}/tts`, {
+        const response = await fetch(`${API_BASE}/tts`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify( {
+          body: JSON.stringify({
             text: text,
             reference_voice_key: referenceVoiceKey,
             output_format: format,
             sample_rate: sampleRate,
             normalize: normalize,
             seed: seed
-          } )
-        } );
+          })
+        });
 
         const data = await response.json();
 
-        // Stop timer and system monitoring
         stopTimer();
         stopSystemMonitoring();
 
         loadingDiv.style.display = 'none';
         submitBtn.disabled = false;
 
-        if ( response.ok && data.success ) {
+        if (response.ok && data.success) {
           resultDiv.className = 'block mt-4 p-4 rounded-lg bg-green-800 border border-green-600';
           resultDiv.innerHTML = `
             <div class="text-green-200">
@@ -739,11 +1270,9 @@
                 <div>Duration: ${formatTime(Math.floor(data.duration))}</div>
                 <div>Filename: ${data.filename}</div>
                 <div>Used Seed: ${data.used_seed || 'N/A'}</div>
-                <div>File saved to server output directory</div>
               </div>
               <audio controls class="w-full mt-3 h-8" style="filter: hue-rotate(90deg);">
                 <source src="data:audio/${format};base64,${data.audio_base64}" type="audio/${format}">
-                Your browser does not support the audio element.
               </audio>
               <div class="mt-3 flex gap-2">
                 <button onclick="downloadFileFromServer('${data.filename}')" 
@@ -770,8 +1299,7 @@
           resultDiv.style.display = 'block';
         }
 
-      } catch ( error ) {
-        // Stop timer and system monitoring on error
+      } catch (error) {
         stopTimer();
         stopSystemMonitoring();
 
@@ -789,10 +1317,10 @@
     }
 
     function addBatchItem() {
-      const container = document.getElementById( 'batchContainer' );
+      const container = document.getElementById('batchContainer');
       const itemCount = container.children.length;
 
-      const newItem = document.createElement( 'div' );
+      const newItem = document.createElement('div');
       newItem.className = 'batch-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-3';
       newItem.innerHTML = `
         <div class="flex items-center justify-between mb-2">
@@ -808,72 +1336,70 @@
           </select>
         </div>
       `;
-      container.appendChild( newItem );
+      container.appendChild(newItem);
       updateReferenceVoicesSelects();
     }
 
-    function removeBatchItem( button ) {
-      const items = document.querySelectorAll( '.batch-item' );
-      if ( items.length > 1 ) {
-        button.closest( '.batch-item' ).remove();
+    function removeBatchItem(button) {
+      const items = document.querySelectorAll('.batch-item');
+      if (items.length > 1) {
+        button.closest('.batch-item').remove();
       }
     }
 
     async function processBatch() {
-      const batchItems = document.querySelectorAll( '.batch-item' );
+      const batchItems = document.querySelectorAll('.batch-item');
       const requests = [];
 
-      for ( const item of batchItems ) {
-        const text = item.querySelector( '.batch-text' ).value;
-        const referenceVoiceKey = item.querySelector( '.batch-reference-voice' ).value;
+      for (const item of batchItems) {
+        const text = item.querySelector('.batch-text').value;
+        const referenceVoiceKey = item.querySelector('.batch-reference-voice').value;
 
-        if ( text && referenceVoiceKey ) {
-          requests.push( {
+        if (text && referenceVoiceKey) {
+          requests.push({
             text: text,
             reference_voice_key: referenceVoiceKey,
             output_format: 'wav',
             sample_rate: 24000,
             normalize: true
-          } );
+          });
         }
       }
 
-      if ( requests.length === 0 ) {
-        alert( 'Please add at least one valid request' );
+      if (requests.length === 0) {
+        alert('Please add at least one valid request');
         return;
       }
 
-      const resultDiv = document.getElementById( 'batchResult' );
-      const loadingDiv = document.getElementById( 'batchLoading' );
+      const resultDiv = document.getElementById('batchResult');
+      const loadingDiv = document.getElementById('batchLoading');
 
       resultDiv.style.display = 'none';
       loadingDiv.style.display = 'block';
 
-      // Start batch timer and system monitoring for batch processing
       startBatchTimer();
-      startSystemMonitoring( 'batch' );
+      startSystemMonitoring('batch');
 
       try {
-        const response = await fetch( `${API_BASE}/tts/batch`, {
+        const response = await fetch(`${API_BASE}/tts/batch`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify( {
+          body: JSON.stringify({
             requests: requests,
             return_as_zip: false
-          } )
-        } );
+          })
+        });
 
         const data = await response.json();
 
-        // Stop batch timer and system monitoring
         stopBatchTimer();
         stopSystemMonitoring();
 
         loadingDiv.style.display = 'none';
 
-        if ( response.ok ) {
+        if (response.ok) {
           let resultHtml = `
             <div class="bg-chalkboard-800 border border-chalk-600 rounded-lg p-4">
               <h4 class="font-semibold text-chalk-100 mb-3">📊 Batch Results</h4>
@@ -886,8 +1412,8 @@
               <div class="space-y-3">
           `;
 
-          data.results.forEach( ( result, index ) => {
-            if ( result.success ) {
+          data.results.forEach((result, index) => {
+            if (result.success) {
               resultHtml += `
                 <div class="bg-green-800 border border-green-600 rounded-md p-3">
                   <div class="text-green-200">
@@ -895,7 +1421,6 @@
                     <div class="text-xs mt-1">File: ${result.filename}</div>
                     <audio controls class="w-full mt-2 h-8" style="filter: hue-rotate(90deg);">
                       <source src="data:audio/wav;base64,${result.audio_base64}" type="audio/wav">
-                      Your browser does not support the audio element.
                     </audio>
                     <button onclick="downloadFileFromServer('${result.filename}')" 
                       class="mt-2 bg-chalk-600 hover:bg-chalk-500 text-chalkboard-900 px-2 py-1 rounded text-xs">
@@ -914,7 +1439,7 @@
                 </div>
               `;
             }
-          } );
+          });
 
           resultHtml += '</div></div>';
 
@@ -934,8 +1459,7 @@
           resultDiv.style.display = 'block';
         }
 
-      } catch ( error ) {
-        // Stop batch timer and system monitoring on error
+      } catch (error) {
         stopBatchTimer();
         stopSystemMonitoring();
 
@@ -952,206 +1476,182 @@
     }
 
     async function loadGeneratedFiles() {
-      const historyDiv = document.getElementById( 'historyList' );
+      const historyDiv = document.getElementById('historyList');
 
       try {
-        const filesResponse = await fetch( `${API_BASE}/files` );
+        const filesResponse = await fetch(`${API_BASE}/files`);
         const filesData = await filesResponse.json();
 
-        if ( filesResponse.ok && filesData.files.length > 0 ) {
+        if (filesResponse.ok && filesData.files.length > 0) {
           let historyHtml = '';
-          filesData.files.forEach( file => {
-            const fileDate = new Date( file.created_time ).toLocaleString();
-            const fileSizeKB = Math.round( file.size / 1024 );
+          filesData.files.forEach(file => {
+            const fileDate = new Date(file.created_time).toLocaleString();
+            const fileSizeKB = Math.round(file.size / 1024);
 
             historyHtml += `
               <div class="file-item bg-chalkboard-800 border border-chalk-700 rounded-lg p-4 hover:bg-chalkboard-700 transition-colors duration-200">
                 <div class="flex items-center justify-between mb-2">
                   <h4 class="font-semibold text-chalk-100 text-sm">${file.filename}</h4>
-                  <div class="flex gap-2">
-                    <button onclick="deleteFileFromServer('${file.filename}')" class="text-red-400 hover:text-red-300 text-sm" title="Delete file">
-                      🗑️
-                    </button>
-                  </div>
+                  <button onclick="deleteFileFromServer('${file.filename}')" class="text-red-400 hover:text-red-300 text-sm" title="Delete file">
+                    🗑️
+                  </button>
                 </div>
                 <div class="text-chalk-300 text-xs space-y-1 mb-3">
                   <div><strong>Format:</strong> ${file.format.toUpperCase()}</div>
                   <div><strong>Size:</strong> ${fileSizeKB}KB</div>
                   <div><strong>Created:</strong> ${fileDate}</div>
                 </div>
-                <audio controls class="w-full h-8 mb-3 mt-3" style="filter: hue-rotate(90deg);">
+                <audio controls class="w-full h-8 mb-3" style="filter: hue-rotate(90deg);">
                   <source src="${API_BASE}/files/${file.filename}" type="audio/${file.format}">
-                  Your browser does not support the audio element.
                 </audio>
-                <div class="flex gap-2">
-                  <button onclick="downloadFileFromServer('${file.filename}')" 
-                    class="bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-3 py-1 rounded text-xs">
-                    📥 Download
-                  </button>
-                </div>
+                <button onclick="downloadFileFromServer('${file.filename}')" 
+                  class="w-full bg-chalk-700 hover:bg-chalk-600 text-chalk-100 px-3 py-1 rounded text-xs">
+                  📥 Download
+                </button>
               </div>
             `;
-          } );
+          });
           historyDiv.innerHTML = historyHtml;
         } else {
           historyDiv.innerHTML = '<div class="text-center py-8 text-chalk-400">No generated files yet. Create some audio to see them here!</div>';
         }
 
-        updateStorageInfo( filesData.total_count, filesData.total_size );
+        updateStorageInfo(filesData.total_count, filesData.total_size);
 
-      } catch ( error ) {
-        console.error( 'Failed to load generated files:', error );
+      } catch (error) {
+        console.error('Failed to load generated files:', error);
         historyDiv.innerHTML = '<div class="text-center py-8 text-red-400">Failed to load files. Please try again.</div>';
       }
     }
 
-    async function deleteFileFromServer( filename ) {
-      if ( !confirm( `Are you sure you want to delete "${filename}"?` ) ) return;
+    async function deleteFileFromServer(filename) {
+      if (!confirm(`Are you sure you want to delete "${filename}"?`)) return;
 
       try {
-        const response = await fetch( `${API_BASE}/files/${filename}`, {
+        const response = await fetch(`${API_BASE}/files/${filename}`, {
           method: 'DELETE'
-        } );
+        });
 
-        if ( response.ok ) {
+        if (response.ok) {
           loadGeneratedFiles();
         } else {
-          alert( 'Failed to delete file' );
+          alert('Failed to delete file');
         }
-      } catch ( error ) {
-        alert( 'Error deleting file: ' + error.message );
+      } catch (error) {
+        alert('Error deleting file: ' + error.message);
       }
     }
 
-    async function downloadFileFromServer( filename ) {
+    async function downloadFileFromServer(filename) {
       try {
-        const response = await fetch( `${API_BASE}/files/${filename}` );
-        if ( response.ok ) {
+        const response = await fetch(`${API_BASE}/files/${filename}`);
+        if (response.ok) {
           const blob = await response.blob();
-          const url = window.URL.createObjectURL( blob );
-          const a = document.createElement( 'a' );
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
           a.href = url;
           a.download = filename;
-          document.body.appendChild( a );
+          document.body.appendChild(a);
           a.click();
-          window.URL.revokeObjectURL( url );
-          document.body.removeChild( a );
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
         } else {
-          alert( 'Failed to download file' );
+          alert('Failed to download file');
         }
-      } catch ( error ) {
-        alert( 'Error downloading file: ' + error.message );
+      } catch (error) {
+        alert('Error downloading file: ' + error.message);
       }
     }
 
     async function clearAllFiles() {
-      if ( !confirm( 'Are you sure you want to delete ALL generated files? This action cannot be undone.' ) ) return;
+      if (!confirm('Are you sure you want to delete ALL generated files? This action cannot be undone.')) return;
 
       try {
-        const response = await fetch( `${API_BASE}/files`, {
+        const response = await fetch(`${API_BASE}/files`, {
           method: 'DELETE'
-        } );
+        });
 
         const data = await response.json();
-        if ( response.ok ) {
-          alert( data.message );
+        if (response.ok) {
+          alert(data.message);
           loadGeneratedFiles();
         } else {
-          alert( 'Failed to clear files' );
+          alert('Failed to clear files');
         }
-      } catch ( error ) {
-        alert( 'Error clearing files: ' + error.message );
+      } catch (error) {
+        alert('Error clearing files: ' + error.message);
       }
     }
 
-    function updateStorageInfo( totalFiles = 0, totalSize = 0 ) {
-      document.getElementById( 'totalFiles' ).textContent = totalFiles;
-      document.getElementById( 'storageUsed' ).textContent = ( totalSize / 1024 / 1024 ).toFixed( 2 ) + ' MB';
+    function updateStorageInfo(totalFiles = 0, totalSize = 0) {
+      document.getElementById('totalFiles').textContent = totalFiles;
+      document.getElementById('storageUsed').textContent = (totalSize / 1024 / 1024).toFixed(2) + ' MB';
     }
-
-    // Close modals when ESC key is pressed
-    document.addEventListener( 'keydown', function ( event ) {
-      if ( event.key === 'Escape' ) {
-        closeModal();
-        closeEditModal();
-        closeCreateModal();
-      }
-    } );
 
     // System monitoring variables
     let systemMonitorInterval = null;
 
-    // System monitoring functions
     async function fetchSystemStats() {
       try {
-        const response = await fetch( `${API_BASE}/system/monitor` );
+        const response = await fetch(`${API_BASE}/system/monitor`);
         const data = await response.json();
 
-        if ( response.ok && data.success ) {
+        if (response.ok && data.success) {
           return data;
         }
         return null;
-      } catch ( error ) {
-        console.error( 'Failed to fetch system stats:', error );
+      } catch (error) {
+        console.error('Failed to fetch system stats:', error);
         return null;
       }
     }
 
-    function updateSystemStatsDisplay( stats, prefix = '' ) {
-      if ( !stats ) return;
+    function updateSystemStatsDisplay(stats, prefix = '') {
+      if (!stats) return;
 
-      // Debug: Log the stats to console
-      console.log( 'System stats:', stats );
-
-      // Update CPU usage
-      const cpuUsageEl = document.getElementById( `${prefix}cpuUsage` );
-      const cpuBarEl = document.getElementById( `${prefix}cpuBar` );
-      if ( cpuUsageEl && cpuBarEl ) {
-        cpuUsageEl.textContent = `${stats.cpu_usage.toFixed( 1 )}%`;
+      const cpuUsageEl = document.getElementById(`${prefix}cpuUsage`);
+      const cpuBarEl = document.getElementById(`${prefix}cpuBar`);
+      if (cpuUsageEl && cpuBarEl) {
+        cpuUsageEl.textContent = `${stats.cpu_usage.toFixed(1)}%`;
         cpuBarEl.style.width = `${stats.cpu_usage}%`;
 
-        // Update bar color based on usage
-        if ( stats.cpu_usage > 80 ) {
-          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
-        } else if ( stats.cpu_usage > 60 ) {
-          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        if (stats.cpu_usage > 80) {
+          cpuBarEl.className = cpuBarEl.className.replace(/bg-\w+-500/, 'bg-red-500');
+        } else if (stats.cpu_usage > 60) {
+          cpuBarEl.className = cpuBarEl.className.replace(/bg-\w+-500/, 'bg-yellow-500');
         } else {
-          cpuBarEl.className = cpuBarEl.className.replace( /bg-\w+-500/, 'bg-chalk-500' );
+          cpuBarEl.className = cpuBarEl.className.replace(/bg-\w+-500/, 'bg-chalk-500');
         }
       }
 
-      // Update Memory usage
-      const memoryUsageEl = document.getElementById( `${prefix}memoryUsage` );
-      const memoryBarEl = document.getElementById( `${prefix}memoryBar` );
-      if ( memoryUsageEl && memoryBarEl ) {
-        memoryUsageEl.textContent = `${stats.memory_usage.toFixed( 1 )}%`;
+      const memoryUsageEl = document.getElementById(`${prefix}memoryUsage`);
+      const memoryBarEl = document.getElementById(`${prefix}memoryBar`);
+      if (memoryUsageEl && memoryBarEl) {
+        memoryUsageEl.textContent = `${stats.memory_usage.toFixed(1)}%`;
         memoryBarEl.style.width = `${stats.memory_usage}%`;
 
-        // Update bar color based on usage
-        if ( stats.memory_usage > 80 ) {
-          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
-        } else if ( stats.memory_usage > 60 ) {
-          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+        if (stats.memory_usage > 80) {
+          memoryBarEl.className = memoryBarEl.className.replace(/bg-\w+-500/, 'bg-red-500');
+        } else if (stats.memory_usage > 60) {
+          memoryBarEl.className = memoryBarEl.className.replace(/bg-\w+-500/, 'bg-yellow-500');
         } else {
-          memoryBarEl.className = memoryBarEl.className.replace( /bg-\w+-500/, 'bg-blue-500' );
+          memoryBarEl.className = memoryBarEl.className.replace(/bg-\w+-500/, 'bg-blue-500');
         }
       }
 
-      // Update GPU usage
-      const gpuUsageEl = document.getElementById( `${prefix}gpuUsage` );
-      const gpuBarEl = document.getElementById( `${prefix}gpuBar` );
-      if ( gpuUsageEl && gpuBarEl ) {
-        if ( stats.gpu_usage !== undefined && stats.gpu_usage !== null ) {
-          gpuUsageEl.textContent = `${stats.gpu_usage.toFixed( 1 )}%`;
+      const gpuUsageEl = document.getElementById(`${prefix}gpuUsage`);
+      const gpuBarEl = document.getElementById(`${prefix}gpuBar`);
+      if (gpuUsageEl && gpuBarEl) {
+        if (stats.gpu_usage !== undefined && stats.gpu_usage !== null) {
+          gpuUsageEl.textContent = `${stats.gpu_usage.toFixed(1)}%`;
           gpuBarEl.style.width = `${stats.gpu_usage}%`;
 
-          // Update bar color based on usage
-          if ( stats.gpu_usage > 80 ) {
-            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
-          } else if ( stats.gpu_usage > 60 ) {
-            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          if (stats.gpu_usage > 80) {
+            gpuBarEl.className = gpuBarEl.className.replace(/bg-\w+-500/, 'bg-red-500');
+          } else if (stats.gpu_usage > 60) {
+            gpuBarEl.className = gpuBarEl.className.replace(/bg-\w+-500/, 'bg-yellow-500');
           } else {
-            gpuBarEl.className = gpuBarEl.className.replace( /bg-\w+-500/, 'bg-green-500' );
+            gpuBarEl.className = gpuBarEl.className.replace(/bg-\w+-500/, 'bg-green-500');
           }
         } else {
           gpuUsageEl.textContent = 'N/A';
@@ -1159,22 +1659,20 @@
         }
       }
 
-      // Update GPU Memory usage
-      const gpuMemoryUsageEl = document.getElementById( `${prefix}gpuMemoryUsage` );
-      const gpuMemoryBarEl = document.getElementById( `${prefix}gpuMemoryBar` );
-      if ( gpuMemoryUsageEl && gpuMemoryBarEl ) {
-        if ( stats.gpu_memory_total !== undefined && stats.gpu_memory_total !== null && stats.gpu_memory_total > 0 ) {
-          const gpuMemoryPercent = ( stats.gpu_memory_used / stats.gpu_memory_total ) * 100;
-          gpuMemoryUsageEl.textContent = `${gpuMemoryPercent.toFixed( 1 )}%`;
+      const gpuMemoryUsageEl = document.getElementById(`${prefix}gpuMemoryUsage`);
+      const gpuMemoryBarEl = document.getElementById(`${prefix}gpuMemoryBar`);
+      if (gpuMemoryUsageEl && gpuMemoryBarEl) {
+        if (stats.gpu_memory_total !== undefined && stats.gpu_memory_total !== null && stats.gpu_memory_total > 0) {
+          const gpuMemoryPercent = (stats.gpu_memory_used / stats.gpu_memory_total) * 100;
+          gpuMemoryUsageEl.textContent = `${gpuMemoryPercent.toFixed(1)}%`;
           gpuMemoryBarEl.style.width = `${gpuMemoryPercent}%`;
 
-          // Update bar color based on usage
-          if ( gpuMemoryPercent > 80 ) {
-            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-red-500' );
-          } else if ( gpuMemoryPercent > 60 ) {
-            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-yellow-500' );
+          if (gpuMemoryPercent > 80) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace(/bg-\w+-500/, 'bg-red-500');
+          } else if (gpuMemoryPercent > 60) {
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace(/bg-\w+-500/, 'bg-yellow-500');
           } else {
-            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace( /bg-\w+-500/, 'bg-purple-500' );
+            gpuMemoryBarEl.className = gpuMemoryBarEl.className.replace(/bg-\w+-500/, 'bg-purple-500');
           }
         } else {
           gpuMemoryUsageEl.textContent = 'N/A';
@@ -1183,34 +1681,27 @@
       }
     }
 
-    function startSystemMonitoring( prefix = '' ) {
-      console.log( 'Starting system monitoring with prefix:', prefix );
-
-      if ( systemMonitorInterval ) {
-        clearInterval( systemMonitorInterval );
+    function startSystemMonitoring(prefix = '') {
+      if (systemMonitorInterval) {
+        clearInterval(systemMonitorInterval);
       }
 
-      // Initial fetch
-      fetchSystemStats().then( stats => {
-        console.log( 'Initial system stats:', stats );
-        updateSystemStatsDisplay( stats, prefix );
-      } );
+      fetchSystemStats().then(stats => {
+        updateSystemStatsDisplay(stats, prefix);
+      });
 
-      // Set up interval for updates every 2 seconds
-      systemMonitorInterval = setInterval( async () => {
+      systemMonitorInterval = setInterval(async () => {
         const stats = await fetchSystemStats();
-        updateSystemStatsDisplay( stats, prefix );
-      }, 2000 );
+        updateSystemStatsDisplay(stats, prefix);
+      }, 2000);
     }
 
     function stopSystemMonitoring() {
-      if ( systemMonitorInterval ) {
-        clearInterval( systemMonitorInterval );
+      if (systemMonitorInterval) {
+        clearInterval(systemMonitorInterval);
         systemMonitorInterval = null;
       }
     }
-
-    // ...existing code...
   </script>
 </body>
 

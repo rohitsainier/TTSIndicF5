@@ -162,6 +162,41 @@ class TTSProcessor:
         reference_voice_info_with_seed["used_seed"] = used_seed
 
         return audio, reference_voice_info_with_seed # type: ignore
+    
+    def combine_audio_segments_with_pauses(self, audio_segments: List[Dict], sample_rate: int = 24000) -> np.ndarray:
+        """
+        Combine multiple audio segments with pauses between them
+        
+        Args:
+            audio_segments: List of dicts with 'audio' (numpy array) and 'pause_after' (milliseconds)
+            sample_rate: Audio sample rate
+            
+        Returns:
+            Combined audio as numpy array
+        """
+        combined = []
+        
+        for i, segment in enumerate(audio_segments):
+            audio = segment['audio']
+            pause_ms = segment.get('pause_after', 300)
+            
+            # Ensure audio is float32
+            if audio.dtype == np.int16:
+                audio = audio.astype(np.float32) / 32768.0
+            
+            # Add the audio segment
+            combined.append(audio)
+            
+            # Add pause (silence) after segment (except for last segment)
+            if i < len(audio_segments) - 1 and pause_ms > 0:
+                pause_samples = int((pause_ms / 1000.0) * sample_rate)
+                silence = np.zeros(pause_samples, dtype=np.float32)
+                combined.append(silence)
+        
+        # Concatenate all segments
+        result = np.concatenate(combined)
+        
+        return result
 
     def split_text_into_chunks(self, text: str, max_chars: int = 300) -> List[str]:
         """

@@ -102,6 +102,36 @@ class TTSRequest(BaseModel):
     seed: Optional[int] = Field(-1, description="Random seed for reproducible generation (-1 for random)")
     save_to_file: Optional[bool] = Field(True, description="Whether to save the audio file to disk")
 
+class PodcastSpeaker(BaseModel):
+    id: str = Field(..., description="Unique speaker ID")
+    name: str = Field(..., description="Speaker name")
+    reference_voice_key: str = Field(..., description="Reference voice key for this speaker")
+
+class PodcastSegment(BaseModel):
+    speaker_id: str = Field(..., description="ID of the speaker for this segment")
+    text: str = Field(..., description="Text content for this segment")
+    pause_after: Optional[int] = Field(300, description="Pause duration after this segment in milliseconds")
+
+class PodcastRequest(BaseModel):
+    title: str = Field(..., description="Podcast episode title")
+    speakers: List[PodcastSpeaker] = Field(..., description="List of speakers in the podcast")
+    segments: List[PodcastSegment] = Field(..., description="List of dialogue segments")
+    pause_duration: Optional[int] = Field(500, description="Default pause between segments in milliseconds")
+    output_format: Optional[str] = Field("wav", description="Output audio format (wav, mp3)")
+    sample_rate: Optional[int] = Field(24000, description="Audio sample rate")
+    normalize: Optional[bool] = Field(True, description="Whether to normalize audio")
+    seed: Optional[int] = Field(-1, description="Random seed for reproducible generation")
+
+class PodcastResponse(BaseModel):
+    success: bool
+    title: str
+    segments_count: int
+    duration: float
+    filename: str
+    audio_base64: str
+    message: Optional[str] = None
+    speaker_info: Optional[List[Dict[str, Any]]] = None
+
 class TTSBatchRequest(BaseModel):
     requests: List[TTSRequest] = Field(..., description="List of TTS requests to process")
     return_as_zip: Optional[bool] = Field(False, description="Return all audio files as a zip archive")
@@ -792,6 +822,150 @@ async def delete_reference_voice(voice_key: str):
     except Exception as e:
         logger.error(f"Failed to delete voice {voice_key}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to delete voice: {str(e)}")
+    
+@api_router.post("/podcast/generate", response_model=PodcastResponse)
+async def generate_podcast(request: PodcastRequest):
+    """
+    Generate a podcast from multiple speakers and script segments
+    
+    Creates a seamless audio podcast by combining multiple TTS segments
+    with different speakers and controlled pacing.
+    """
+    try:
+        start_time = datetime.now()
+        
+        # Validate all speakers have valid reference voice keys
+        for speaker in request.speakers:
+            if speaker.reference_voice_key not in tts_processor.reference_voices:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Voice key '{speaker.reference_voice_key}' not found for speaker '{speaker.name}'"
+                )
+        
+        # Validate all segments reference valid speakers
+        speaker_ids = {s.id for s in request.speakers}
+        for i, segment in enumerate(request.segments):
+            if segment.speaker_id not in speaker_ids:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Segment {i+1} references unknown speaker ID '{segment.speaker_id}'"
+                )
+        
+        # Ensure output directory exists
+        os.makedirs(PATHS["output_dir"], exist_ok=True)
+        
+        # Create speaker lookup dictionary
+        speaker_map = {s.id: s for s in request.speakers}
+        
+        # Generate audio for each segment
+        audio_segments = []
+        segment_results = []
+        
+        logger.info(f"Generating podcast with {len(request.segments)} segments and {len(request.speakers)} speakers")
+        
+        for i, segment in enumerate(request.segments):
+            try:
+                speaker = speaker_map[segment.speaker_id]
+                
+                logger.info(f"Processing segment {i+1}/{len(request.segments)}: {speaker.name} - {segment.text[:50]}...")
+                
+                # Generate audio for this segment
+                audio, voice_info = await generate_audio_async(
+                    text=segment.text,
+                    reference_voice_key=speaker.reference_voice_key,
+                    seed=request.seed,
+                    sample_rate=request.sample_rate
+                )
+                
+                # Normalize if requested
+                if request.normalize:
+                    if audio.dtype == np.int16:
+                        audio = audio.astype(np.float32) / 32768.0
+                    # Normalize to -1 to 1 range
+                    max_val = np.abs(audio).max()
+                    if max_val > 0:
+                        audio = audio / max_val
+                
+                # Store segment info
+                audio_segments.append({
+                    'audio': audio,
+                    'pause_after': segment.pause_after or request.pause_duration,
+                    'speaker_name': speaker.name,
+                    'speaker_id': speaker.id
+                })
+                
+                segment_results.append({
+                    'segment_number': i + 1,
+                    'speaker_name': speaker.name,
+                    'text_preview': segment.text[:100] + ('...' if len(segment.text) > 100 else ''),
+                    'duration': len(audio) / request.sample_rate,
+                    'success': True
+                })
+                
+            except Exception as e:
+                logger.error(f"Failed to generate segment {i+1}: {str(e)}")
+                segment_results.append({
+                    'segment_number': i + 1,
+                    'speaker_name': speaker_map.get(segment.speaker_id, {}).name if segment.speaker_id in speaker_map else 'Unknown',
+                    'text_preview': segment.text[:100],
+                    'error': str(e),
+                    'success': False
+                })
+                # Continue with other segments even if one fails
+                continue
+        
+        if not audio_segments:
+            raise Exception("No audio segments were successfully generated")
+        
+        # Combine all segments with pauses
+        logger.info(f"Combining {len(audio_segments)} audio segments...")
+        combined_audio = tts_processor.combine_audio_segments_with_pauses(
+            audio_segments,
+            sample_rate=request.sample_rate
+        )
+        
+        # Generate filename and save
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_title = "".join(c for c in request.title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        safe_title = safe_title.replace(' ', '_')[:50]  # Limit title length
+        filename = f"podcast_{safe_title}_{timestamp}.{request.output_format}"
+        file_path = os.path.join(PATHS["output_dir"], filename)
+        
+        # Save audio file
+        tts_processor.save_audio_file(combined_audio, file_path, request.sample_rate)
+        
+        # Convert to base64 for response
+        audio_base64 = audio_to_base64(combined_audio, request.sample_rate, request.output_format)
+        
+        end_time = datetime.now()
+        total_duration = (end_time - start_time).total_seconds()
+        audio_duration = len(combined_audio) / request.sample_rate
+        
+        logger.info(f"Podcast generation completed: {filename} ({audio_duration:.2f}s audio, {total_duration:.2f}s processing)")
+        
+        return PodcastResponse(
+            success=True,
+            title=request.title,
+            segments_count=len(audio_segments),
+            duration=total_duration,
+            filename=filename,
+            audio_base64=audio_base64,
+            speaker_info=[
+                {
+                    'speaker_name': s.name,
+                    'reference_voice_key': s.reference_voice_key,
+                    'segment_count': sum(1 for seg in request.segments if seg.speaker_id == s.id)
+                }
+                for s in request.speakers
+            ],
+            message=f"Podcast generated successfully with {len(audio_segments)} segments"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Podcast generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Podcast generation failed: {str(e)}")
 
 # System monitoring endpoint
 @api_router.get("/system/monitor")
